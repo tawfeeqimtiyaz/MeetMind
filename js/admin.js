@@ -1,11 +1,20 @@
-// Admin JS — kept minimal and safe 🔧
-console.log("Admin dashboard loaded");
+fetch("http://127.0.0.1:5000/meetings")
+    .then(response => response.json())
+    .then(data => {
+        const container = document.querySelector(".meetings");
+        container.innerHTML = "";
 
-document.addEventListener('DOMContentLoaded', () => {
-    const btn = document.querySelector('.primary');
-    if (!btn) return; // defensive: avoid errors if markup changes
+        data.forEach(meeting => {
+            const card = document.createElement("div");
+            card.className = "meeting-card";
 
-    btn.addEventListener('click', () => {
-        alert('Create Meeting form will open here');
+            card.innerHTML = `
+                <h3>${meeting.title}</h3>
+                <p>Date: ${meeting.datetime}</p>
+                <p>Status: <span class="status draft">Draft</span></p>
+                <button class="btn small">Open</button>
+            `;
+
+            container.appendChild(card);
+        });
     });
-});
