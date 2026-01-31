@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Admin Dashboard – SyncNotes</title>
+
+    <!-- CSS -->
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+    <!-- ===== DASHBOARD LAYOUT ===== -->
+    <div class="dashboard">
+
+        <!-- ===== SIDEBAR ===== -->
+        <aside class="sidebar">
+            <h2 class="sidebar-logo">SyncNotes</h2>
+
+            <ul class="menu">
+                <li class="active">📋 Meetings</li>
+                <li>➕ Create Meeting</li>
+                <li>📊 Reports</li>
+                <li>🚪 Logout</li>
+            </ul>
+        </aside>
+
+        <!-- ===== MAIN CONTENT ===== -->
+        <main class="main-content">
+
+            <!-- HEADER -->
+            <header class="dashboard-header">
+                <h1>Admin Dashboard</h1>
+                <button class="btn primary">+ New Meeting</button>
+            </header>
+
+            <!-- MEETINGS LIST -->
+            <section class="meetings">
+                
+                <div class="meeting-card">
+                    <h3>Product Launch Sync</h3>
+                    <p>Date: 31 Jan 2026</p>
+                    <p>Status: <span class="status draft">Draft</span></p>
+                    <button class="btn small">Open</button>
+                </div>
+
+                <div class="meeting-card">
+                    <h3>Engineering Weekly</h3>
+                    <p>Date: 29 Jan 2026</p>
+                    <p>Status: <span class="status published">Published</span></p>
+                    <button class="btn small">Open</button>
+                </div>
+
+            </section>
+
+        </main>
+    </div>
+
+    <!-- JS -->
+    <script src="js/admin.js"></script>
+</body>
+</html>
