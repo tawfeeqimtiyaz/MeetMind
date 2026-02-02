@@ -7,54 +7,27 @@
 </head>
 <body>
 
-<div class="dashboard">
+<nav class="navbar">
+    <div class="logo">SyncNotes</div>
+    <a href="admin.html" class="btn">Back</a>
+</nav>
 
-    <!-- ===== SIDEBAR ===== -->
-    <aside class="sidebar">
-        <h2 class="sidebar-logo">SyncNotes</h2>
+<section style="padding:40px 60px; max-width:700px;">
+    <h1 style="font-size:32px; margin-bottom:10px;">Create New Meeting</h1>
+    <p style="color:#64748b; margin-bottom:30px;">
+        Provide meeting details. AI processing will start after creation.
+    </p>
 
-        <ul class="menu">
-            <li>📋 Meetings</li>
-            <li class="active">➕ Create Meeting</li>
-            <li>📊 Reports</li>
-            <li>🚪 Logout</li>
-        </ul>
-    </aside>
+    <input id="title" class="input" placeholder="Meeting Title" style="margin-bottom:15px;">
+    <textarea id="agenda" class="input" placeholder="Meeting Agenda" style="margin-bottom:15px;"></textarea>
+    <input id="datetime" type="datetime-local" class="input" style="margin-bottom:15px;">
+    <input id="participants" class="input" placeholder="Participants (emails, comma separated)">
 
-    <!-- ===== MAIN CONTENT ===== -->
-    <main class="main-content">
+    <button class="btn primary" style="margin-top:20px;" onclick="createMeeting()">
+        Create Meeting
+    </button>
+</section>
 
-        <header class="dashboard-header">
-            <h1>Create New Meeting</h1>
-        </header>
-
-        <!-- ===== FORM ===== -->
-        <form class="meeting-form">
-
-            <label>Meeting Title</label>
-            <input type="text" placeholder="e.g. Product Launch Sync" required>
-
-            <label>Meeting Agenda</label>
-            <textarea placeholder="Discuss roadmap, assign tasks, finalize strategy" required></textarea>
-
-            <label>Date & Time</label>
-            <input type="datetime-local" required>
-
-            <label>Participants (Emails)</label>
-            <textarea placeholder="alex@email.com, maya@email.com" required></textarea>
-
-            <label>Upload Audio / Video</label>
-            <input type="file" accept="audio/*,video/*">
-
-            <button type="submit" class="btn primary">
-                Create Meeting
-            </button>
-
-        </form>
-
-    </main>
-</div>
-
-<script src="js/create-meeting.js"></script>
+<script src="js/script.js"></script>
 </body>
 </html>
