@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block preheader %}{{ inviter }} invited you to join {{ organization }} on MeetMind.{% endblock %}
+{% block content %}
+<h1 style="margin:0 0 12px;font-size:22px;line-height:30px;">You're invited to {{ organization }}</h1>
+<p style="margin:0 0 12px;font-size:15px;line-height:24px;color:#334155;">Hi{% if name %} {{ name }}{% endif %},</p>
+<p style="margin:0 0 12px;font-size:15px;line-height:24px;color:#334155;">
+  <strong>{{ inviter }}</strong> invited you to join <strong>{{ organization }}</strong> on MeetMind as
+  {{ "an admin" if role == "admin" else "a member" }}. MeetMind turns meeting recordings into summaries,
+  decisions and tasks, and answers questions about them.
+</p>
+{% with url=accept_url, label="Accept invite" %}{% include "_button.html" %}{% endwith %}
+<p style="margin:0 0 6px;font-size:13px;line-height:20px;color:#5b6b82;">This link expires in {{ expires_hours }} hours and works once. If the button doesn't work, paste this into your browser:</p>
+<p style="margin:0 0 20px;font-size:12px;line-height:18px;word-break:break-all;"><a href="{{ accept_url }}" style="color:#2563eb;">{{ accept_url }}</a></p>
+{% endblock %}
+{% block footer %}Not expecting this? You can ignore this email. No account is created until you accept.{% endblock %}

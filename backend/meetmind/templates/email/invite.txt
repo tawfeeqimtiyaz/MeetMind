@@ -1,0 +1,11 @@
+Hi{% if name %} {{ name }}{% endif %},
+
+{{ inviter }} invited you to join {{ organization }} on MeetMind as {{ "an admin" if role == "admin" else "a member" }}.
+
+Accept the invite and set your password:
+{{ accept_url }}
+
+The link expires in {{ expires_hours }} hours and works once.
+Not expecting this? Ignore this email. No account is created until you accept.
+
+- MeetMind
