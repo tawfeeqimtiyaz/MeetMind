@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>{{ subject }}</title>
+</head>
+<body style="margin:0;padding:0;background:#f6f8fb;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#0f172a;">
+<span style="display:none;max-height:0;overflow:hidden;opacity:0;">{% block preheader %}{% endblock %}</span>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f6f8fb;">
+  <tr><td align="center" style="padding:32px 16px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;">
+      <tr><td style="padding:0 4px 16px;">
+        <table role="presentation" cellpadding="0" cellspacing="0"><tr>
+          <td style="width:28px;height:28px;border-radius:8px;background:#22c55e;background-image:linear-gradient(135deg,#22c55e,#3b82f6);color:#ffffff;font-weight:800;font-size:16px;text-align:center;line-height:28px;">M</td>
+          <td style="padding-left:10px;font-weight:700;font-size:18px;color:#0f172a;">MeetMind</td>
+        </tr></table>
+      </td></tr>
+      <tr><td style="background:#ffffff;border:1px solid #e2e8f0;border-radius:14px;overflow:hidden;">
+        <div style="height:4px;background:#22c55e;background-image:linear-gradient(90deg,#22c55e,#3b82f6);"></div>
+        <div style="padding:28px 28px 8px;">
+          {% block content %}{% endblock %}
+        </div>
+      </td></tr>
+      <tr><td style="padding:18px 4px;font-size:12px;line-height:18px;color:#8a98ad;">
+        {% block footer %}You received this email because you are part of a MeetMind workspace.{% endblock %}<br>
+        MeetMind · meeting notes, tasks and answers from your recordings
+      </td></tr>
+    </table>
+  </td></tr>
+</table>
+</body>
+</html>
