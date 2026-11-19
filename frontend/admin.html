@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dashboard · MeetMind</title>
+  <link rel="icon" href="assets/logo.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+
+<div class="app">
+  <aside class="sidebar" id="sidebar" aria-label="Sidebar">
+    <a class="brand" href="admin.html"><img src="assets/logo.svg" alt="">MeetMind</a>
+    <nav class="nav" aria-label="Main">
+      <a class="nav-item" href="admin.html" aria-current="page">
+        <svg class="icon"><use href="assets/icons.svg#i-dashboard"/></svg>Dashboard
+      </a>
+      <a class="nav-item" href="create-meeting.html">
+        <svg class="icon"><use href="assets/icons.svg#i-plus"/></svg>New meeting
+      </a>
+      <a class="nav-item" href="#meetings">
+        <svg class="icon"><use href="assets/icons.svg#i-calendar"/></svg>Meetings
+      </a>
+      <a class="nav-item" href="#team">
+        <svg class="icon"><use href="assets/icons.svg#i-users"/></svg>Team
+      </a>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="user-chip">
+        <span class="avatar" aria-hidden="true"></span>
+        <div class="who"><div class="name"></div><div class="role"></div></div>
+        <a class="btn btn-ghost btn-icon" href="login.html?signout=1" aria-label="Sign out" title="Sign out">
+          <svg class="icon"><use href="assets/icons.svg#i-logout"/></svg>
+        </a>
+      </div>
+    </div>
+  </aside>
+
+  <div>
+    <header class="topbar">
+      <button class="btn btn-ghost btn-icon" type="button" data-nav-toggle aria-controls="sidebar"
+              aria-expanded="false" aria-label="Open menu">
+        <svg class="icon icon-lg"><use href="assets/icons.svg#i-menu"/></svg>
+      </button>
+      <a class="brand" href="admin.html"><img src="assets/logo.svg" alt="">MeetMind</a>
+      <span class="avatar" aria-hidden="true"></span>
+    </header>
+
+    <main class="main" id="main">
+      <div class="main-inner" id="page">
+        <div class="page-header">
+          <div>
+            <h1 id="greeting">Dashboard</h1>
+            <p>Manage meetings and turn decisions into action.</p>
+          </div>
+          <a class="btn btn-primary" href="create-meeting.html">
+            <svg class="icon"><use href="assets/icons.svg#i-plus"/></svg>New meeting
+          </a>
+        </div>
+
+        <section class="stats" aria-label="Overview">
+          <div class="card stat">
+            <div class="stat-label"><svg class="icon"><use href="assets/icons.svg#i-calendar"/></svg>Meetings this month</div>
+            <div class="stat-value" data-stat="meetings_this_month">–</div>
+          </div>
+          <div class="card stat">
+            <div class="stat-label"><svg class="icon"><use href="assets/icons.svg#i-shield"/></svg>Awaiting your review</div>
+            <div class="stat-value" data-stat="awaiting_review">–</div>
+            <div class="stat-hint">AI-drafted tasks to approve</div>
+          </div>
+          <div class="card stat">
+            <div class="stat-label"><svg class="icon"><use href="assets/icons.svg#i-tasks"/></svg>Open tasks</div>
+            <div class="stat-value" data-stat="open_tasks">–</div>
+          </div>
+          <div class="card stat">
+            <div class="stat-label"><svg class="icon"><use href="assets/icons.svg#i-target"/></svg>Completed tasks</div>
+            <div class="stat-value" data-stat="done_tasks">–</div>
+          </div>
+        </section>
+
+        <section class="card" id="review" aria-labelledby="review-title" hidden>
+          <div class="card-header">
+            <h2 class="card-title" id="review-title">
+              <svg class="icon"><use href="assets/icons.svg#i-shield"/></svg>Needs your review
+            </h2>
+          </div>
+          <div class="list" id="review-list"></div>
+        </section>
+
+        <section class="card" id="meetings" aria-labelledby="meetings-title">
+          <div class="card-header">
+            <h2 class="card-title" id="meetings-title">
+              <svg class="icon"><use href="assets/icons.svg#i-calendar"/></svg>Meetings
+            </h2>
+            <label class="sr-only" for="status-filter">Filter by status</label>
+            <select class="input input-sm" id="status-filter">
+              <option value="">All statuses</option>
+              <option value="scheduled">Scheduled</option>
+              <option value="processing">Processing</option>
+              <option value="review">Review</option>
+              <option value="completed">Completed</option>
+              <option value="failed">Failed</option>
+            </select>
+          </div>
+          <div class="list" id="meeting-list"></div>
+          <div class="list-footer"><button class="btn btn-ghost btn-sm" type="button" id="more-meetings" hidden>Load more</button></div>
+        </section>
+
+        <section class="card" id="team" aria-labelledby="team-title">
+          <div class="card-header">
+            <div>
+              <h2 class="card-title" id="team-title">
+                <svg class="icon"><use href="assets/icons.svg#i-users"/></svg>Team
+              </h2>
+              <p class="card-subtitle">Invite people by email. Members see the meetings they attend and their own tasks.</p>
+            </div>
+          </div>
+
+          <form class="invite-form" id="invite-form" novalidate>
+            <div class="field">
+              <label class="label" for="invite-email">Email</label>
+              <input class="input" id="invite-email" name="email" type="email" required autocomplete="off" placeholder="name@company.com">
+            </div>
+            <div class="field">
+              <label class="label" for="invite-name">Name <span class="optional">(optional)</span></label>
+              <input class="input" id="invite-name" name="name" maxlength="120" autocomplete="off">
+            </div>
+            <div class="field">
+              <label class="label" for="invite-role">Role</label>
+              <select class="input" id="invite-role" name="role">
+                <option value="member">Member</option>
+                <option value="admin">Admin</option>
+              </select>
+            </div>
+            <button class="btn btn-primary" type="submit">
+              <svg class="icon"><use href="assets/icons.svg#i-send"/></svg>Send invite
+            </button>
+          </form>
+
+          <div class="list" id="team-list"></div>
+        </section>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script src="js/ui.js"></script>
+<script src="js/api.js"></script>
+<script src="js/app.js"></script>
+<script src="js/pages/admin.js"></script>
+</body>
+</html>
