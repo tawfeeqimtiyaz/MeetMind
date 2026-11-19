@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>New meeting · MeetMind</title>
+  <link rel="icon" href="assets/logo.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+
+<div class="app">
+  <aside class="sidebar" id="sidebar" aria-label="Sidebar">
+    <a class="brand" href="admin.html"><img src="assets/logo.svg" alt="">MeetMind</a>
+    <nav class="nav" aria-label="Main">
+      <a class="nav-item" href="admin.html">
+        <svg class="icon"><use href="assets/icons.svg#i-dashboard"/></svg>Dashboard
+      </a>
+      <a class="nav-item" href="create-meeting.html" aria-current="page">
+        <svg class="icon"><use href="assets/icons.svg#i-plus"/></svg>New meeting
+      </a>
+      <a class="nav-item" href="admin.html#meetings">
+        <svg class="icon"><use href="assets/icons.svg#i-calendar"/></svg>Meetings
+      </a>
+      <a class="nav-item" href="admin.html#team">
+        <svg class="icon"><use href="assets/icons.svg#i-users"/></svg>Team
+      </a>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="user-chip">
+        <span class="avatar" aria-hidden="true"></span>
+        <div class="who"><div class="name"></div><div class="role"></div></div>
+        <a class="btn btn-ghost btn-icon" href="login.html?signout=1" aria-label="Sign out" title="Sign out">
+          <svg class="icon"><use href="assets/icons.svg#i-logout"/></svg>
+        </a>
+      </div>
+    </div>
+  </aside>
+
+  <div>
+    <header class="topbar">
+      <button class="btn btn-ghost btn-icon" type="button" data-nav-toggle aria-controls="sidebar"
+              aria-expanded="false" aria-label="Open menu">
+        <svg class="icon icon-lg"><use href="assets/icons.svg#i-menu"/></svg>
+      </button>
+      <a class="brand" href="admin.html"><img src="assets/logo.svg" alt="">MeetMind</a>
+      <span class="avatar" aria-hidden="true"></span>
+    </header>
+
+    <main class="main" id="main">
+      <div class="main-inner" style="max-width: 760px;">
+        <a class="back-link" href="admin.html">
+          <svg class="icon"><use href="assets/icons.svg#i-arrow-left"/></svg>Back to dashboard
+        </a>
+
+        <div class="page-header">
+          <div>
+            <h1>New meeting</h1>
+            <p>Participants can see the meeting and its results. After the meeting, upload the recording and MeetMind does the rest.</p>
+          </div>
+        </div>
+
+        <form class="card form" method="post" novalidate id="meeting-form">
+          <div class="alert alert-error" role="alert" id="form-error" tabindex="-1" hidden></div>
+
+          <div class="field">
+            <label class="label" for="title">Meeting title</label>
+            <input class="input" id="title" name="title" required maxlength="200"
+                   placeholder="e.g. Product Launch Sync">
+          </div>
+
+          <div class="form-row">
+            <div class="field">
+              <label class="label" for="scheduled_at">Date &amp; time</label>
+              <input class="input" id="scheduled_at" name="scheduled_at" type="datetime-local" required>
+            </div>
+            <div class="field">
+              <label class="label" for="timezone">Time zone</label>
+              <input class="input" id="timezone" name="timezone" readonly aria-describedby="tz-help">
+              <span class="help" id="tz-help">Taken from your device.</span>
+            </div>
+          </div>
+
+          <div class="field">
+            <label class="label" for="agenda">Agenda <span class="optional">(optional)</span></label>
+            <textarea class="textarea" id="agenda" name="agenda" maxlength="5000"
+                      placeholder="What should this meeting decide? The AI uses the agenda to write a better summary."></textarea>
+          </div>
+
+          <div class="field">
+            <label class="label" for="participants">Participants</label>
+            <textarea class="textarea" id="participants" name="participants" rows="3" style="min-height: 80px;"
+                      placeholder="maya@company.com, alex@company.com" aria-describedby="participants-help"></textarea>
+            <span class="help" id="participants-help">Email addresses separated by commas or new lines. People without a MeetMind account can be invited from <a href="admin.html#team">Team</a>.</span>
+          </div>
+
+          <div class="row" style="justify-content: flex-end;">
+            <a class="btn btn-ghost" href="admin.html">Cancel</a>
+            <button class="btn btn-primary" type="submit">
+              <svg class="icon"><use href="assets/icons.svg#i-plus"/></svg>Create meeting
+            </button>
+          </div>
+        </form>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script src="js/ui.js"></script>
+<script src="js/api.js"></script>
+<script src="js/app.js"></script>
+<script src="js/pages/create-meeting.js"></script>
+</body>
+</html>
