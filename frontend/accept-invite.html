@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Join your team · MeetMind</title>
+  <link rel="icon" href="assets/logo.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <main class="auth-page">
+    <div class="card auth-card">
+      <a class="brand" href="index.html"><img src="assets/logo.svg" alt="">MeetMind</a>
+
+      <h1>Join your team</h1>
+      <p class="card-subtitle">You’ve been invited to MeetMind. Set your name and a password to get started.</p>
+
+      <div class="alert alert-error" role="alert" id="invite-error" tabindex="-1" hidden></div>
+
+      <form class="form" method="post" novalidate data-accept-invite>
+        <div class="field">
+          <label class="label" for="name">Your name</label>
+          <input class="input" id="name" name="name" autocomplete="name" required maxlength="120">
+        </div>
+
+        <div class="field">
+          <label class="label" for="new-password">Create a password</label>
+          <div class="input-group">
+            <input class="input" id="new-password" name="password" type="password"
+                   autocomplete="new-password" required minlength="10" aria-describedby="pw-help">
+            <button class="btn btn-ghost btn-icon" type="button" data-toggle-password="new-password"
+                    aria-label="Show password" aria-pressed="false">
+              <svg class="icon"><use href="assets/icons.svg#i-eye"/></svg>
+            </button>
+          </div>
+          <span class="help" id="pw-help">At least 10 characters.</span>
+        </div>
+
+        <button class="btn btn-primary btn-block btn-lg" type="submit">Join workspace</button>
+      </form>
+
+      <p class="auth-footer">Already have an account? <a href="login.html">Sign in</a></p>
+    </div>
+  </main>
+
+  <script src="js/ui.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+</body>
+</html>
