@@ -1,0 +1,38 @@
+# Web (FastAPI on the Uvicorn ASGI server)
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+python-multipart==0.0.20
+pydantic-settings==2.7.0
+limits==3.14.1
+
+# Data
+SQLAlchemy==2.0.36
+alembic==1.14.0
+psycopg[binary]==3.2.3
+
+# Validation & security
+pydantic==2.10.3
+email-validator==2.2.0
+PyJWT==2.10.1
+argon2-cffi==23.1.0
+
+# Time zone database (zoneinfo needs it on slim images)
+tzdata==2025.2
+
+# Email templates
+jinja2==3.1.6
+
+# Background jobs
+redis==5.2.1
+rq==2.1.0
+
+# AI pipeline (Phase 3): LangGraph workflow + LangChain model providers
+langgraph==1.2.23
+langgraph-checkpoint-postgres==3.2.1
+psycopg-pool==3.3.3
+langchain-core==1.8.3
+langchain-nvidia-ai-endpoints==1.5.0
+langchain-groq==1.2.1
+langchain-ollama==1.1.0
+groq==1.7.0
+langsmith==0.15.0
