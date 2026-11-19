@@ -1,0 +1,13 @@
+Hi{% if name %} {{ name }}{% endif %},
+
+"{{ meeting_title }}" has been transcribed and analysed. MeetMind drafted {{ draft_count }} task{{ "s" if draft_count != 1 }}.
+Nobody is notified until you approve them.
+{% if summary %}
+
+AI summary:
+{{ summary }}
+{% endif %}
+
+Review tasks: {{ meeting_url }}
+
+- MeetMind
