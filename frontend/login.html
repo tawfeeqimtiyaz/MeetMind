@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sign in · MeetMind</title>
+  <link rel="icon" href="assets/logo.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <main class="auth-page">
+    <div class="card auth-card">
+      <a class="brand" href="index.html"><img src="assets/logo.svg" alt="">MeetMind</a>
+
+      <h1>Welcome back</h1>
+      <p class="card-subtitle">Sign in to your workspace. Admins and members use the same login.</p>
+
+      <div class="alert alert-error" role="alert" id="login-error" tabindex="-1" hidden></div>
+
+      <form class="form" method="post" novalidate data-login>
+        <div class="field">
+          <label class="label" for="email">Work email</label>
+          <input class="input" id="email" name="email" type="email" autocomplete="email" required
+                 placeholder="you@company.com">
+        </div>
+
+        <div class="field">
+          <label class="label" for="password">Password</label>
+          <div class="input-group">
+            <input class="input" id="password" name="password" type="password"
+                   autocomplete="current-password" required minlength="10">
+            <button class="btn btn-ghost btn-icon" type="button" data-toggle-password="password"
+                    aria-label="Show password" aria-pressed="false">
+              <svg class="icon"><use href="assets/icons.svg#i-eye"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <button class="btn btn-primary btn-block btn-lg" type="submit">Sign in</button>
+      </form>
+
+      <p class="auth-footer">
+        New to MeetMind? <a href="signup.html">Create a workspace</a><br>
+        Got an invite? Use the link in your email to set your password.
+      </p>
+    </div>
+  </main>
+
+  <script src="js/ui.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+</body>
+</html>
