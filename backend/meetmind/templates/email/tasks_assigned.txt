@@ -1,0 +1,14 @@
+Hi{% if name %} {{ name }}{% endif %},
+
+You have new tasks from "{{ meeting_title }}":
+{% for t in tasks %}
+
+- {{ t.title }} ({{ ("due " ~ t.due) if t.due else "no due date" }})
+{% if t.evidence %}
+  "{{ t.evidence }}"
+{% endif %}
+{% endfor %}
+
+Open my tasks: {{ tasks_url }}
+
+- MeetMind

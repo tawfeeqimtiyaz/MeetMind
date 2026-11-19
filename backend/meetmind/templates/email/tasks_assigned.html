@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block preheader %}You have {{ tasks|length }} new task{{ "s" if tasks|length != 1 }} from {{ meeting_title }}.{% endblock %}
+{% block content %}
+<h1 style="margin:0 0 12px;font-size:22px;line-height:30px;">New task{{ "s" if tasks|length != 1 }} for you</h1>
+<p style="margin:0 0 16px;font-size:15px;line-height:24px;color:#334155;">Hi{% if name %} {{ name }}{% endif %}, these were agreed in <strong>{{ meeting_title }}</strong>:</p>
+{% for t in tasks %}
+<div style="margin:0 0 10px;padding:14px 16px;border:1px solid #e2e8f0;border-radius:10px;">
+  <div style="font-size:15px;font-weight:600;line-height:22px;">{{ t.title }}</div>
+  <div style="font-size:13px;line-height:20px;color:#5b6b82;">{{ ("Due " ~ t.due) if t.due else "No due date" }}</div>
+  {% if t.evidence %}<div style="margin-top:8px;padding-left:10px;border-left:3px solid #22c55e;font-size:13px;line-height:20px;color:#5b6b82;font-style:italic;">“{{ t.evidence }}”</div>{% endif %}
+</div>
+{% endfor %}
+{% with url=tasks_url, label="Open my tasks" %}{% include "_button.html" %}{% endwith %}
+{% endblock %}
