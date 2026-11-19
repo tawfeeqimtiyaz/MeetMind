@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>My work · MeetMind</title>
+  <link rel="icon" href="assets/logo.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+
+<div class="app">
+  <aside class="sidebar" id="sidebar" aria-label="Sidebar">
+    <a class="brand" href="member.html"><img src="assets/logo.svg" alt="">MeetMind</a>
+    <nav class="nav" aria-label="Main">
+      <a class="nav-item" href="member.html" aria-current="page">
+        <svg class="icon"><use href="assets/icons.svg#i-dashboard"/></svg>My work
+      </a>
+      <a class="nav-item" href="#tasks">
+        <svg class="icon"><use href="assets/icons.svg#i-tasks"/></svg>My tasks<span class="count" id="nav-task-count" hidden></span>
+      </a>
+      <a class="nav-item" href="#meetings">
+        <svg class="icon"><use href="assets/icons.svg#i-calendar"/></svg>My meetings
+      </a>
+      <a class="nav-item" href="admin.html" data-admin-only hidden>
+        <svg class="icon"><use href="assets/icons.svg#i-shield"/></svg>Admin dashboard
+      </a>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="user-chip">
+        <span class="avatar" aria-hidden="true"></span>
+        <div class="who"><div class="name"></div><div class="role"></div></div>
+        <a class="btn btn-ghost btn-icon" href="login.html?signout=1" aria-label="Sign out" title="Sign out">
+          <svg class="icon"><use href="assets/icons.svg#i-logout"/></svg>
+        </a>
+      </div>
+    </div>
+  </aside>
+
+  <div>
+    <header class="topbar">
+      <button class="btn btn-ghost btn-icon" type="button" data-nav-toggle aria-controls="sidebar"
+              aria-expanded="false" aria-label="Open menu">
+        <svg class="icon icon-lg"><use href="assets/icons.svg#i-menu"/></svg>
+      </button>
+      <a class="brand" href="member.html"><img src="assets/logo.svg" alt="">MeetMind</a>
+      <span class="avatar" aria-hidden="true"></span>
+    </header>
+
+    <main class="main" id="main">
+      <div class="main-inner">
+        <div class="page-header">
+          <div>
+            <h1 id="greeting">My work</h1>
+            <p>Here’s what’s on your plate from recent meetings.</p>
+          </div>
+        </div>
+
+        <section class="stats" aria-label="Overview">
+          <div class="card stat">
+            <div class="stat-label"><svg class="icon"><use href="assets/icons.svg#i-tasks"/></svg>Open tasks</div>
+            <div class="stat-value" data-stat="open_tasks">–</div>
+          </div>
+          <div class="card stat">
+            <div class="stat-label"><svg class="icon"><use href="assets/icons.svg#i-clock"/></svg>Due within 7 days</div>
+            <div class="stat-value" data-stat="due_this_week">–</div>
+          </div>
+          <div class="card stat">
+            <div class="stat-label"><svg class="icon"><use href="assets/icons.svg#i-calendar"/></svg>Upcoming meetings</div>
+            <div class="stat-value" data-stat="upcoming_meetings">–</div>
+          </div>
+        </section>
+
+        <section class="card" id="tasks" aria-labelledby="my-tasks-title">
+          <div class="card-header">
+            <h2 class="card-title" id="my-tasks-title">
+              <svg class="icon"><use href="assets/icons.svg#i-tasks"/></svg>My tasks
+            </h2>
+            <label class="checkbox-label small"><input type="checkbox" id="show-done"> Show completed</label>
+          </div>
+          <div class="task-list" id="task-list"></div>
+        </section>
+
+        <section class="card" id="meetings" aria-labelledby="my-meetings-title">
+          <div class="card-header">
+            <h2 class="card-title" id="my-meetings-title">
+              <svg class="icon"><use href="assets/icons.svg#i-calendar"/></svg>My meetings
+            </h2>
+          </div>
+          <div class="list" id="meeting-list"></div>
+        </section>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script src="js/ui.js"></script>
+<script src="js/api.js"></script>
+<script src="js/app.js"></script>
+<script src="js/tasks.js"></script>
+<script src="js/pages/member.js"></script>
+</body>
+</html>
