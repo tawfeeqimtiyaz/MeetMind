@@ -1,0 +1,10 @@
+Hi{% if name %} {{ name }}{% endif %},
+
+MeetMind couldn't process the recording for "{{ meeting_title }}":
+
+  {{ error }}
+
+Fix the cause, then use "Retry processing" on the meeting page:
+{{ meeting_url }}
+
+- MeetMind
