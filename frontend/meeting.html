@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Meeting · MeetMind</title>
+  <link rel="icon" href="assets/logo.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+
+<div class="app">
+  <aside class="sidebar" id="sidebar" aria-label="Sidebar">
+    <a class="brand" href="admin.html" data-home-link><img src="assets/logo.svg" alt="">MeetMind</a>
+    <nav class="nav" aria-label="Main">
+      <a class="nav-item" href="admin.html" data-admin-only hidden>
+        <svg class="icon"><use href="assets/icons.svg#i-dashboard"/></svg>Dashboard
+      </a>
+      <a class="nav-item" href="create-meeting.html" data-admin-only hidden>
+        <svg class="icon"><use href="assets/icons.svg#i-plus"/></svg>New meeting
+      </a>
+      <a class="nav-item" href="admin.html#meetings" data-admin-only hidden aria-current="page">
+        <svg class="icon"><use href="assets/icons.svg#i-calendar"/></svg>Meetings
+      </a>
+      <a class="nav-item" href="admin.html#team" data-admin-only hidden>
+        <svg class="icon"><use href="assets/icons.svg#i-users"/></svg>Team
+      </a>
+      <a class="nav-item" href="member.html" data-member-only hidden>
+        <svg class="icon"><use href="assets/icons.svg#i-dashboard"/></svg>My work
+      </a>
+      <a class="nav-item" href="member.html#tasks" data-member-only hidden>
+        <svg class="icon"><use href="assets/icons.svg#i-tasks"/></svg>My tasks
+      </a>
+      <a class="nav-item" href="member.html#meetings" data-member-only hidden aria-current="page">
+        <svg class="icon"><use href="assets/icons.svg#i-calendar"/></svg>My meetings
+      </a>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="user-chip">
+        <span class="avatar" aria-hidden="true"></span>
+        <div class="who"><div class="name"></div><div class="role"></div></div>
+        <a class="btn btn-ghost btn-icon" href="login.html?signout=1" aria-label="Sign out" title="Sign out">
+          <svg class="icon"><use href="assets/icons.svg#i-logout"/></svg>
+        </a>
+      </div>
+    </div>
+  </aside>
+
+  <div>
+    <header class="topbar">
+      <button class="btn btn-ghost btn-icon" type="button" data-nav-toggle aria-controls="sidebar"
+              aria-expanded="false" aria-label="Open menu">
+        <svg class="icon icon-lg"><use href="assets/icons.svg#i-menu"/></svg>
+      </button>
+      <a class="brand" href="admin.html" data-home-link><img src="assets/logo.svg" alt="">MeetMind</a>
+      <span class="avatar" aria-hidden="true"></span>
+    </header>
+
+    <main class="main" id="main">
+      <div class="main-inner" id="page">
+        <a class="back-link" href="admin.html" data-home-link>
+          <svg class="icon"><use href="assets/icons.svg#i-arrow-left"/></svg>Back to dashboard
+        </a>
+
+        <div id="loading"></div>
+
+        <div id="meeting" hidden>
+          <div class="page-header">
+            <div>
+              <div class="row">
+                <h1 id="title"></h1>
+                <span id="status"></span>
+              </div>
+              <div class="meeting-meta" id="meta"></div>
+            </div>
+            <button class="btn btn-ghost btn-sm text-danger" type="button" id="delete-meeting" hidden>Delete meeting</button>
+          </div>
+
+          <div id="banner" aria-live="polite"></div>
+
+          <div class="meeting-layout">
+            <div>
+              <section class="card" aria-labelledby="summary-title">
+                <div class="card-header">
+                  <h2 class="card-title" id="summary-title">
+                    <svg class="icon"><use href="assets/icons.svg#i-file"/></svg>Summary
+                  </h2>
+                  <span id="ai-model"></span>
+                </div>
+                <div id="summary"></div>
+              </section>
+
+              <section class="card" aria-labelledby="shifts-title" id="shifts-card" hidden>
+                <div class="card-header">
+                  <h2 class="card-title" id="shifts-title">
+                    <svg class="icon"><use href="assets/icons.svg#i-target"/></svg>Key decisions &amp; strategy shifts
+                  </h2>
+                </div>
+                <ul class="bullets" id="shifts"></ul>
+              </section>
+
+              <section class="card" aria-labelledby="questions-title" id="questions-card" hidden>
+                <div class="card-header">
+                  <h2 class="card-title" id="questions-title">
+                    <svg class="icon"><use href="assets/icons.svg#i-info"/></svg>Open questions
+                  </h2>
+                </div>
+                <ul class="bullets" id="questions"></ul>
+              </section>
+
+              <section class="card" aria-labelledby="tasks-title">
+                <div class="card-header">
+                  <div>
+                    <h2 class="card-title" id="tasks-title">
+                      <svg class="icon"><use href="assets/icons.svg#i-tasks"/></svg>Action items
+                    </h2>
+                    <p class="card-subtitle" id="tasks-subtitle"></p>
+                  </div>
+                </div>
+                <div id="review-panel"></div>
+                <div class="task-list" id="task-list"></div>
+                <details class="add-task" id="add-task" hidden>
+                  <summary><svg class="icon"><use href="assets/icons.svg#i-plus"/></svg>Add a task</summary>
+                  <form class="add-task-form" id="add-task-form" novalidate>
+                    <div class="field">
+                      <label class="label" for="new-task-title">Task</label>
+                      <input class="input" id="new-task-title" name="title" required maxlength="300">
+                    </div>
+                    <div class="field">
+                      <label class="label" for="new-task-owner">Owner</label>
+                      <select class="input" id="new-task-owner" name="assignee_email"></select>
+                    </div>
+                    <div class="field">
+                      <label class="label" for="new-task-due">Due date</label>
+                      <input class="input" id="new-task-due" name="due_date" type="date">
+                    </div>
+                    <button class="btn btn-primary" type="submit">Add task</button>
+                  </form>
+                </details>
+              </section>
+
+              <section class="card" aria-labelledby="recording-title" id="recording-card" hidden>
+                <div class="card-header">
+                  <div>
+                    <h2 class="card-title" id="recording-title">
+                      <svg class="icon"><use href="assets/icons.svg#i-mic"/></svg>Recording
+                    </h2>
+                    <p class="card-subtitle">Upload the meeting recording to generate the transcript, summary and tasks.</p>
+                  </div>
+                </div>
+
+                <div class="list" id="recordings"></div>
+
+                <form id="upload-form" novalidate>
+                  <label class="dropzone" data-dropzone="file-chip" data-max-mb="500" tabindex="0">
+                    <svg class="icon"><use href="assets/icons.svg#i-upload"/></svg>
+                    <span><strong>Choose a file</strong> or drag it here</span>
+                    <span class="help">MP3, WAV, M4A, MP4, WEBM, OGG, FLAC, MOV · up to 500 MB</span>
+                    <input type="file" name="file" required
+                           accept=".mp3,.wav,.m4a,.mp4,.webm,.ogg,.flac,.mpeg,.mov,audio/*,video/*">
+                  </label>
+                  <div class="file-chip" id="file-chip" hidden>
+                    <svg class="icon"><use href="assets/icons.svg#i-file"/></svg>
+                    <span class="file-name"></span>
+                    <span class="file-size muted"></span>
+                    <button class="btn btn-primary btn-sm" type="submit">
+                      <svg class="icon"><use href="assets/icons.svg#i-upload"/></svg>Upload &amp; process
+                    </button>
+                  </div>
+                  <div class="progress" id="upload-progress" hidden>
+                    <div class="progress-bar"><span></span></div>
+                    <span class="small muted" aria-live="polite"></span>
+                  </div>
+                </form>
+              </section>
+
+              <section class="card" aria-labelledby="transcript-heading" id="transcript-card" hidden>
+                <details class="transcript" id="transcript">
+                  <summary id="transcript-heading">Transcript</summary>
+                  <div class="transcript-body" id="transcript-body"></div>
+                </details>
+              </section>
+            </div>
+
+            <div class="side-column">
+              <aside class="card" aria-labelledby="people-title">
+                <div class="card-header">
+                  <h2 class="card-title" id="people-title">
+                    <svg class="icon"><use href="assets/icons.svg#i-users"/></svg>Participants
+                  </h2>
+                </div>
+                <div class="people" id="people"></div>
+              </aside>
+
+              <aside class="card chat" aria-labelledby="chat-title">
+                <div class="card-header">
+                  <h2 class="card-title" id="chat-title">
+                    <svg class="icon"><use href="assets/icons.svg#i-sparkles"/></svg>Ask about this meeting
+                  </h2>
+                </div>
+                <div class="chat-log" id="chat-log" aria-live="polite">
+                  <div class="msg msg-ai">Hi! Ask me anything about this meeting: decisions, owners, deadlines.</div>
+                </div>
+                <div class="chat-suggestions" id="chat-suggestions">
+                  <button class="chip" type="button" data-suggest>What are my tasks?</button>
+                  <button class="chip" type="button" data-suggest>What was decided?</button>
+                  <button class="chip" type="button" data-suggest>Any open questions?</button>
+                </div>
+                <form class="chat-form" id="chat-form">
+                  <label class="sr-only" for="chat-input">Your question</label>
+                  <input class="input" id="chat-input" autocomplete="off" placeholder="Ask a question…" maxlength="1000">
+                  <button class="btn btn-primary btn-icon" type="submit" aria-label="Send">
+                    <svg class="icon"><use href="assets/icons.svg#i-send"/></svg>
+                  </button>
+                </form>
+                <p class="small muted chat-hint" id="chat-hint" hidden>Available once the recording has been processed.</p>
+              </aside>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script src="js/ui.js"></script>
+<script src="js/api.js"></script>
+<script src="js/app.js"></script>
+<script src="js/tasks.js"></script>
+<script src="js/pages/meeting.js"></script>
+</body>
+</html>
