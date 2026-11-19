@@ -39,7 +39,9 @@ and answers questions about the meeting.
 13. [Testing](#13-testing)
 14. [Useful commands](#14-useful-commands)
 15. [Troubleshooting](#15-troubleshooting)
-16. [Roadmap: done and next](#16-roadmap-done-and-next)
+16. [RAG: Retrieval-Augmented Generation (planned)](#16-rag-retrieval-augmented-generation-planned)
+17. [Agentic AI: MeetMind agents (planned)](#17-agentic-ai-meetmind-agents-planned)
+18. [Roadmap: done and next](#18-roadmap-done-and-next)
 
 ---
 
@@ -432,7 +434,99 @@ docker compose down -v                              # stop AND delete all data
 
 ---
 
-## 16. Roadmap: done and next
+## 16. RAG: Retrieval-Augmented Generation (planned)
+
+### What RAG is
+
+An LLM only knows what is in its prompt. **RAG** first **retrieves** the most relevant pieces of your own data,
+then gives only those pieces to the model so it can **generate** an answer grounded in them, with sources.
+
+Today, *Ask about this meeting* puts the **whole** meeting record into the prompt. That works for one meeting of normal length,
+but not for a 3-hour meeting or for questions across **all** meetings. RAG fixes both.
+
+### How it will work in MeetMind
+
+```mermaid
+flowchart LR
+    subgraph Indexing ["Indexing (after each meeting is processed)"]
+        T[Transcript +<br/>summary + decisions + tasks] --> C[Split into chunks<br/>~30–60 s of speech,<br/>with overlap]
+        C --> E[Embedding model<br/>text → vector]
+        E --> V[(ChromaDB<br/>vectors + metadata)]
+    end
+    subgraph Answering ["Answering a question"]
+        Q[Question] --> QE[Embed question]
+        QE --> S[Similarity search<br/>+ filters: organization,<br/>meeting, date, access]
+        V --> S
+        S --> RR[Rerank<br/>best chunks first]
+        RR --> L[LLM writes the answer<br/>citing meeting + timestamp]
+    end
+```
+
+| Step | What happens | Tool |
+|---|---|---|
+| **Chunking** | Transcripts are split along segment timestamps into overlapping chunks, so each chunk keeps its meeting, time range and speaker. | LangChain text splitters |
+| **Embeddings** | Each chunk becomes a vector (a list of numbers that captures its meaning). Similar meanings give nearby vectors. | NVIDIA `nemotron-3.5-embed-1b` **or** a small local embedding model running inside MeetMind (keeps text on your machine) |
+| **Vector store** | Vectors and metadata (organization, meeting, date, participants, timestamps) are saved. | **ChromaDB** (its own container, persistent volume) |
+| **Retrieval** | The question is embedded and the closest chunks are found. Filters make sure people only search **their own organization**, and members only **meetings they attended**. | LangChain retriever + ChromaDB metadata filters |
+| **Hybrid search** | Combines meaning-based search with keyword search, so exact names, numbers and product codes are found too. | ChromaDB + keyword scoring |
+| **Reranking** | A second model re-orders the candidates so the best evidence goes into the prompt. | Reranker model (optional) |
+| **Generation** | The LLM answers **only** from the retrieved chunks and cites `[meeting, 00:12:30]`. If the answer isn't there, it says so. | Nemotron → gpt-oss → Ollama (same fallback chain) |
+
+### What it unlocks
+
+- **Questions across all meetings:** *"What did we decide about pricing last month?"*, *"Which tasks does Maya have from Q4 planning?"*
+- **Meetings of any length:** only the relevant minutes go to the model, so it's cheaper and faster.
+- **Answers you can check:** every answer links to the meeting and the exact timestamp.
+- **Access control kept:** retrieval respects the same organization and role rules as the API.
+- **Measured quality:** retrieval and answers are scored in Phase 8 evals (did the right chunk come back? is the answer faithful to it?).
+
+---
+
+## 17. Agentic AI: MeetMind agents (planned)
+
+### What an AI agent is
+
+A normal LLM call answers once. An **agent** is an LLM that can **decide which tools to use**, call them, look at the results,
+and repeat until the job is done. MeetMind already uses **LangGraph**, which is built for exactly this: agents are graphs with
+memory, tools and human approval steps.
+
+### Planned MeetMind agents
+
+| Agent | What it does | Tools it can use |
+|---|---|---|
+| **Meeting assistant** | Answers complex questions by searching meetings, reading tasks and combining results. *"Summarise every decision about the launch since October and who owns the follow-ups."* | RAG search (ChromaDB), list meetings, read transcript, list tasks |
+| **Follow-up agent** | After a meeting, drafts the follow-up email, proposes the next meeting agenda from open questions, and suggests reminders for tasks close to their due date. | Read meeting, draft email, create task, schedule reminder |
+| **Task manager** | Turns requests into actions: *"Move Alex's prototype task to next Friday and assign the docs to Maya."* | Update task, assign owner, resolve dates |
+| **Insights agent** | Finds patterns across meetings: recurring blockers, overdue owners, decisions that were later reversed. | RAG search, task statistics, Neo4j knowledge graph (Stage B) |
+
+### How agents will be built
+
+```mermaid
+flowchart LR
+    U[User request] --> SUP[Supervisor agent<br/>LangGraph]
+    SUP --> A1[Meeting assistant]
+    SUP --> A2[Follow-up agent]
+    SUP --> A3[Task manager]
+    A1 & A2 & A3 --> TL[Tools: RAG search, tasks,<br/>meetings, email, reminders]
+    TL --> HITL{{Human approval<br/>for actions that change data<br/>or send emails}}
+    HITL --> R[Result + audit log]
+```
+
+- **LangGraph tool-calling agents** (ReAct style: *think → call a tool → read the result → continue*).
+- **Supervisor pattern:** one agent routes each request to the right specialist agent (multi-agent system).
+- **Human-in-the-loop:** reading is automatic, but **anything that changes data or sends email waits for approval**.
+  This is the same `interrupt()` used today for task review.
+- **Memory:** conversation and user preferences are saved with LangGraph checkpoints and stores, so agents remember context.
+- **Guardrails:** permissions are checked inside every tool (an agent can never see another organization's data),
+  an optional safety model (e.g. NVIDIA `nemotron-3.5-content-safety`) checks inputs and outputs, and step limits stop runaway loops.
+- **Observability:** every agent step, tool call and decision is traced in **LangSmith**.
+- **Open models with tool calling:** Nemotron, gpt-oss and gemma4 all support function calling, using the same fallback chain.
+- **Possible extensions:** expose MeetMind's tools through **MCP (Model Context Protocol)** so other AI assistants can use them,
+  and evaluate **CrewAI** for role-based agent teams.
+
+---
+
+## 18. Roadmap: done and next
 
 ### ✅ Done
 
@@ -450,8 +544,9 @@ docker compose down -v                              # stop AND delete all data
 
 | Phase | Plan |
 |---|---|
-| **6. RAG with ChromaDB** | Split transcripts into chunks, create embeddings and store them in **ChromaDB**, so Q&A searches only the relevant parts. Supports very long meetings and questions **across all meetings** ("What did we decide about pricing last month?"). |
-| **7. Evals, CI and docs** | Test sets that measure AI quality (task recall, date accuracy), GitHub Actions running tests on every push. |
+| **6. RAG with ChromaDB** | Chunk transcripts, create embeddings, store them in **ChromaDB**, hybrid search + reranking, answers with meeting and timestamp citations, questions **across all meetings**. See [section 16](#16-rag-retrieval-augmented-generation-planned). |
+| **7. Agentic AI** | **LangGraph** agents with tools: meeting assistant, follow-up agent, task manager, insights agent. Supervisor pattern, human approval for actions, memory, guardrails, LangSmith tracing. See [section 17](#17-agentic-ai-meetmind-agents-planned). |
+| **8. Evals, CI and docs** | Test sets that measure AI quality: task recall, date accuracy, retrieval hit rate, answer faithfulness, agent tool-use success. GitHub Actions run tests on every push. |
 | **Stage B: Kubernetes** | **Helm** chart for local Kubernetes, **KEDA** to scale workers with the queue length, **Grafana** dashboards, **Neo4j** knowledge graph of people, decisions and tasks across meetings. |
 | **Stage C: GPU and Ray** | **KubeRay / Ray Serve** on cloud GPUs to self-host models: faster-whisper, **pyannote speaker diarization** ("who said what", so "I'll do it" gets the right owner) and **vLLM** for open LLMs, switchable through configuration. |
 
