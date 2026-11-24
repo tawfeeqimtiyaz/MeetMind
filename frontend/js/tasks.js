@@ -46,6 +46,8 @@
             ? h("a", { href: "meeting.html?id=" + encodeURIComponent(task.meeting_id) }, task.meeting_title) : null,
           o.showOwner ? h("span", {}, personName(task.assignee) ) : null,
           due,
+          task.priority === "urgent" ? h("span", { class: "badge badge-urgent" }, "Urgent")
+            : task.priority === "high" ? h("span", { class: "badge badge-high" }, "High") : null,
           task.source === "ai" ? h("span", { class: "badge badge-ai" }, "AI") : null,
         ),
         task.evidence ? h("p", { class: "evidence" }, "“" + task.evidence + "”") : null,
