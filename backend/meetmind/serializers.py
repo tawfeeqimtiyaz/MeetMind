@@ -1,5 +1,5 @@
 """Model -> JSON. Kept in one place so the API shape is consistent."""
-from .models import Meeting, Recording, Task, User
+from .models import Document, Meeting, MeetingNote, Recording, Task, User
 
 
 def _iso(dt):
@@ -24,7 +24,37 @@ def recording_out(r: Recording) -> dict:
         "size_bytes": r.size_bytes,
         "status": r.status,
         "error": r.error,
+        "mode": r.mode,
+        "duration_seconds": r.duration_seconds,
+        "important": r.important,
+        "chunks_received": r.chunks_received,
+        "content_type": r.content_type,
         "created_at": _iso(r.created_at),
+    }
+
+
+def note_out(n: MeetingNote) -> dict:
+    return {
+        "id": str(n.id),
+        "kind": n.kind,
+        "text": n.text,
+        "offset_seconds": n.offset_seconds,
+        "author": {"id": str(n.author.id), "name": n.author.name, "email": n.author.email} if n.author else None,
+        "created_at": _iso(n.created_at),
+    }
+
+
+def document_out(d: Document) -> dict:
+    return {
+        "id": str(d.id),
+        "filename": d.filename,
+        "size_bytes": d.size_bytes,
+        "content_type": d.content_type,
+        "status": d.status,
+        "error": d.error,
+        "pages": len(d.pages or []),
+        "uploaded_by": (d.uploaded_by.name or d.uploaded_by.email) if d.uploaded_by else None,
+        "created_at": _iso(d.created_at),
     }
 
 
@@ -44,6 +74,7 @@ def task_out(t: Task) -> dict:
         "source": t.source,
         "approved": t.approved,
         "evidence": t.evidence,
+        "priority": t.priority,
         "suggested_owner": t.suggested_owner,
         "created_at": _iso(t.created_at),
     }
@@ -70,6 +101,9 @@ def meeting_out(m: Meeting, tasks: list[Task]) -> dict:
         "summary": m.summary,
         "strategy_shifts": m.strategy_shifts or [],
         "open_questions": m.open_questions or [],
+        "follow_ups": m.follow_ups or [],
+        "notes": [note_out(n) for n in m.notes],
+        "documents": [document_out(d) for d in m.documents],
         "ai_model": m.ai_model,
         "participants": [
             {"email": p.email, "name": p.user.name if p.user else None, "is_user": p.user_id is not None}
