@@ -1,9 +1,13 @@
 Hi{% if name %} {{ name }}{% endif %},
 
-You have new tasks from "{{ meeting_title }}":
+{% if assigned_by %}{{ assigned_by }} assigned you tasks from "{{ meeting_title }}":{% else %}You have new tasks from "{{ meeting_title }}":{% endif %}
+{% if message %}
+
+"{{ message }}"
+{% endif %}
 {% for t in tasks %}
 
-- {{ t.title }} ({{ ("due " ~ t.due) if t.due else "no due date" }})
+- {% if t.priority == "urgent" %}[URGENT] {% elif t.priority == "high" %}[HIGH] {% endif %}{{ t.title }} ({{ ("due " ~ t.due) if t.due else "no due date" }})
 {% if t.evidence %}
   "{{ t.evidence }}"
 {% endif %}

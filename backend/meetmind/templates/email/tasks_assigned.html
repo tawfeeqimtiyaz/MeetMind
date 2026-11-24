@@ -2,10 +2,17 @@
 {% block preheader %}You have {{ tasks|length }} new task{{ "s" if tasks|length != 1 }} from {{ meeting_title }}.{% endblock %}
 {% block content %}
 <h1 style="margin:0 0 12px;font-size:22px;line-height:30px;">New task{{ "s" if tasks|length != 1 }} for you</h1>
-<p style="margin:0 0 16px;font-size:15px;line-height:24px;color:#334155;">Hi{% if name %} {{ name }}{% endif %}, these were agreed in <strong>{{ meeting_title }}</strong>:</p>
+<p style="margin:0 0 16px;font-size:15px;line-height:24px;color:#334155;">Hi{% if name %} {{ name }}{% endif %}, {% if assigned_by %}<strong>{{ assigned_by }}</strong> assigned you {% else %}these were agreed in {% endif %}{% if assigned_by %}tasks from {% endif %}<strong>{{ meeting_title }}</strong>:</p>
+{% if message %}
+<div style="margin:0 0 16px;padding:12px 16px;background:#eff6ff;border-left:3px solid #2563eb;border-radius:8px;font-size:14px;line-height:22px;color:#1e3a8a;">
+  “{{ message }}”{% if assigned_by %}<br><span style="font-size:12px;color:#5b6b82;">{{ assigned_by }}</span>{% endif %}
+</div>
+{% endif %}
 {% for t in tasks %}
 <div style="margin:0 0 10px;padding:14px 16px;border:1px solid #e2e8f0;border-radius:10px;">
-  <div style="font-size:15px;font-weight:600;line-height:22px;">{{ t.title }}</div>
+  <div style="font-size:15px;font-weight:600;line-height:22px;">
+    {% if t.priority == "urgent" %}<span style="display:inline-block;margin-right:6px;padding:1px 8px;border-radius:999px;background:#fee2e2;color:#b91c1c;font-size:11px;font-weight:700;letter-spacing:.03em;">URGENT</span>{% elif t.priority == "high" %}<span style="display:inline-block;margin-right:6px;padding:1px 8px;border-radius:999px;background:#ffedd5;color:#c2410c;font-size:11px;font-weight:700;">HIGH</span>{% endif %}{{ t.title }}
+  </div>
   <div style="font-size:13px;line-height:20px;color:#5b6b82;">{{ ("Due " ~ t.due) if t.due else "No due date" }}</div>
   {% if t.evidence %}<div style="margin-top:8px;padding-left:10px;border-left:3px solid #22c55e;font-size:13px;line-height:20px;color:#5b6b82;font-style:italic;">“{{ t.evidence }}”</div>{% endif %}
 </div>
