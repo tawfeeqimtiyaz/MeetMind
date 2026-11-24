@@ -35,6 +35,9 @@
       <a class="nav-item" href="member.html#meetings" data-member-only hidden aria-current="page">
         <svg class="icon"><use href="assets/icons.svg#i-calendar"/></svg>My meetings
       </a>
+      <a class="nav-item" href="ask.html">
+        <svg class="icon"><use href="assets/icons.svg#i-sparkles"/></svg>Ask MeetMind
+      </a>
     </nav>
     <div class="sidebar-footer">
       <div class="user-chip">
@@ -70,6 +73,9 @@
             <div>
               <div class="row">
                 <h1 id="title"></h1>
+                <button class="btn btn-ghost btn-icon btn-sm" type="button" id="rename" hidden aria-label="Rename meeting" title="Rename">
+                  <svg class="icon"><use href="assets/icons.svg#i-file"/></svg>
+                </button>
                 <span id="status"></span>
               </div>
               <div class="meeting-meta" id="meta"></div>
@@ -81,6 +87,135 @@
 
           <div class="meeting-layout">
             <div>
+              <!-- Recording: record live in the browser, or upload a file (admins) -->
+              <section class="card" aria-labelledby="recording-title" id="recording-card" hidden>
+                <div class="card-header">
+                  <div>
+                    <h2 class="card-title" id="recording-title">
+                      <svg class="icon"><use href="assets/icons.svg#i-mic"/></svg>Recording
+                    </h2>
+                    <p class="card-subtitle">Record the meeting here, live, or upload a recording afterwards.</p>
+                  </div>
+                </div>
+
+                <div class="tabs" role="tablist" aria-label="Recording method">
+                  <button class="tab" role="tab" type="button" id="tab-live" aria-selected="true" aria-controls="panel-live">
+                    <span class="rec-dot" aria-hidden="true"></span>Record live
+                  </button>
+                  <button class="tab" role="tab" type="button" id="tab-upload" aria-selected="false" aria-controls="panel-upload">
+                    <svg class="icon"><use href="assets/icons.svg#i-upload"/></svg>Upload a file
+                  </button>
+                </div>
+
+                <div id="panel-live" role="tabpanel" aria-labelledby="tab-live">
+                  <!-- setup -->
+                  <div id="live-setup">
+                    <fieldset class="mode-picker">
+                      <legend class="label">Where is the meeting?</legend>
+                      <label class="mode">
+                        <input type="radio" name="mode" value="room" checked>
+                        <span class="mode-body"><strong>In the room</strong><span>Conference room or meeting hall: records the microphone.</span></span>
+                      </label>
+                      <label class="mode">
+                        <input type="radio" name="mode" value="online">
+                        <span class="mode-body"><strong>Online meeting</strong><span>Zoom, Teams or Meet on this computer: records the meeting's sound + your mic.</span></span>
+                      </label>
+                      <label class="mode">
+                        <input type="radio" name="mode" value="screen">
+                        <span class="mode-body"><strong>Online + screen</strong><span>Also records the screen as video (slides, demos).</span></span>
+                      </label>
+                    </fieldset>
+                    <div class="form-row">
+                      <div class="field">
+                        <label class="label" for="mic">Microphone</label>
+                        <select class="input" id="mic"><option value="">Default microphone</option></select>
+                        <span class="help">In a big room, a USB conference microphone or speakerphone gives the clearest sound.</span>
+                      </div>
+                      <div class="field">
+                        <span class="label">Sound</span>
+                        <label class="checkbox-label"><input type="checkbox" id="noise"> Reduce background noise</label>
+                        <span class="help" id="noise-help">Leave off so quieter voices and questions from the room are kept.</span>
+                      </div>
+                    </div>
+                    <p class="small muted" id="share-help" hidden>
+                      After you press Start, choose the meeting's browser tab (tick <strong>Share tab audio</strong>) or your
+                      entire screen (tick <strong>Share system audio</strong>, Windows). Works in Chrome and Edge.
+                    </p>
+                    <div class="row">
+                      <button class="btn btn-primary" type="button" id="rec-start">
+                        <span class="rec-dot" aria-hidden="true"></span>Start recording
+                      </button>
+                      <span class="small muted">Tell participants the meeting is being recorded.</span>
+                    </div>
+                  </div>
+
+                  <!-- live -->
+                  <div id="live-running" class="live" hidden>
+                    <div class="live-top">
+                      <span class="rec-badge" id="rec-badge"><span class="rec-dot" aria-hidden="true"></span><span id="rec-state">REC</span></span>
+                      <span class="rec-timer" id="rec-timer" aria-live="off">00:00:00</span>
+                    </div>
+                    <div class="level" aria-hidden="true"><span id="level-bar"></span></div>
+                    <p class="small" id="level-hint" aria-live="polite">Sound level</p>
+                    <div class="live-actions">
+                      <button class="btn btn-secondary" type="button" id="rec-pause">Pause</button>
+                      <button class="btn btn-secondary" type="button" id="rec-mark">⭐ Mark this moment</button>
+                      <button class="btn btn-danger" type="button" id="rec-stop">Stop &amp; process</button>
+                    </div>
+                    <p class="small muted" id="upload-status" aria-live="polite">Saving as you go…</p>
+                  </div>
+                </div>
+
+                <div id="panel-upload" role="tabpanel" aria-labelledby="tab-upload" hidden>
+                  <form id="upload-form" novalidate>
+                    <label class="dropzone" data-dropzone="file-chip" data-max-mb="500" tabindex="0">
+                      <svg class="icon"><use href="assets/icons.svg#i-upload"/></svg>
+                      <span><strong>Choose a file</strong> or drag it here</span>
+                      <span class="help">MP3, WAV, M4A, MP4, WEBM, OGG, FLAC, MOV · up to 500 MB</span>
+                      <input type="file" name="file" required
+                             accept=".mp3,.wav,.m4a,.mp4,.webm,.ogg,.flac,.mpeg,.mov,audio/*,video/*">
+                    </label>
+                    <div class="file-chip" id="file-chip" hidden>
+                      <svg class="icon"><use href="assets/icons.svg#i-file"/></svg>
+                      <span class="file-name"></span>
+                      <span class="file-size muted"></span>
+                      <button class="btn btn-primary btn-sm" type="submit">
+                        <svg class="icon"><use href="assets/icons.svg#i-upload"/></svg>Upload &amp; process
+                      </button>
+                    </div>
+                    <div class="progress" id="upload-progress" hidden>
+                      <div class="progress-bar"><span></span></div>
+                      <span class="small muted" aria-live="polite"></span>
+                    </div>
+                  </form>
+                </div>
+
+                <div class="player" id="player" hidden></div>
+                <div class="list" id="recordings"></div>
+              </section>
+
+              <!-- Notes: anyone in the meeting -->
+              <section class="card" aria-labelledby="notes-title">
+                <div class="card-header">
+                  <div>
+                    <h2 class="card-title" id="notes-title">
+                      <svg class="icon"><use href="assets/icons.svg#i-file"/></svg>Meeting notes
+                    </h2>
+                    <p class="card-subtitle">Typed notes are given to the AI with the recording, so nothing important is missed.</p>
+                  </div>
+                </div>
+                <form class="note-form" id="note-form" novalidate>
+                  <label class="sr-only" for="note-text">Add a note</label>
+                  <textarea class="textarea" id="note-text" rows="2" maxlength="4000" required
+                            placeholder="e.g. Maya will send the budget by Friday · Customer asked about SSO"></textarea>
+                  <div class="row note-actions">
+                    <span class="small muted" id="note-when"></span>
+                    <button class="btn btn-primary btn-sm" type="submit">Add note</button>
+                  </div>
+                </form>
+                <ul class="notes" id="notes"></ul>
+              </section>
+
               <section class="card" aria-labelledby="summary-title">
                 <div class="card-header">
                   <h2 class="card-title" id="summary-title">
@@ -94,10 +229,22 @@
               <section class="card" aria-labelledby="shifts-title" id="shifts-card" hidden>
                 <div class="card-header">
                   <h2 class="card-title" id="shifts-title">
-                    <svg class="icon"><use href="assets/icons.svg#i-target"/></svg>Key decisions &amp; strategy shifts
+                    <svg class="icon"><use href="assets/icons.svg#i-target"/></svg>Key decisions &amp; strategy
                   </h2>
                 </div>
                 <ul class="bullets" id="shifts"></ul>
+              </section>
+
+              <section class="card" aria-labelledby="followups-title" id="followups-card" hidden>
+                <div class="card-header">
+                  <div>
+                    <h2 class="card-title" id="followups-title">
+                      <svg class="icon"><use href="assets/icons.svg#i-sparkles"/></svg>Questions &amp; answers
+                    </h2>
+                    <p class="card-subtitle">Questions raised during the meeting, including follow-ups from the room.</p>
+                  </div>
+                </div>
+                <div class="followups" id="followups"></div>
               </section>
 
               <section class="card" aria-labelledby="questions-title" id="questions-card" hidden>
@@ -107,6 +254,30 @@
                   </h2>
                 </div>
                 <ul class="bullets" id="questions"></ul>
+              </section>
+
+              <!-- Task assistant (admins) -->
+              <section class="card assistant" aria-labelledby="assistant-title" id="assistant-card" hidden>
+                <div class="card-header">
+                  <div>
+                    <h2 class="card-title" id="assistant-title">
+                      <svg class="icon"><use href="assets/icons.svg#i-sparkles"/></svg>Task assistant
+                    </h2>
+                    <p class="card-subtitle">Tell MeetMind who does what and by when. You'll see the plan before anything changes or anyone is emailed.</p>
+                  </div>
+                </div>
+                <form id="assistant-form" novalidate>
+                  <label class="sr-only" for="assistant-input">Instruction</label>
+                  <textarea class="textarea" id="assistant-input" rows="2" maxlength="2000" required
+                            placeholder="e.g. Give the API docs to Maya and the demo to Jordan. Everything ASAP, tell them it's urgent."></textarea>
+                  <div class="chat-suggestions">
+                    <button class="chip" type="button" data-instruction>Approve all tasks and notify the owners</button>
+                    <button class="chip" type="button" data-instruction>Everything is urgent: due as soon as possible</button>
+                    <button class="chip" type="button" data-instruction>Assign the unassigned tasks to me</button>
+                  </div>
+                  <div class="row"><button class="btn btn-primary" type="submit">Prepare plan</button></div>
+                </form>
+                <div id="assistant-plan"></div>
               </section>
 
               <section class="card" aria-labelledby="tasks-title">
@@ -135,44 +306,34 @@
                       <label class="label" for="new-task-due">Due date</label>
                       <input class="input" id="new-task-due" name="due_date" type="date">
                     </div>
+                    <div class="field">
+                      <label class="label" for="new-task-priority">Priority</label>
+                      <select class="input" id="new-task-priority" name="priority">
+                        <option value="normal">Normal</option><option value="high">High</option>
+                        <option value="urgent">Urgent</option><option value="low">Low</option>
+                      </select>
+                    </div>
                     <button class="btn btn-primary" type="submit">Add task</button>
                   </form>
                 </details>
               </section>
 
-              <section class="card" aria-labelledby="recording-title" id="recording-card" hidden>
+              <!-- Documents: anyone in the meeting -->
+              <section class="card" aria-labelledby="docs-title">
                 <div class="card-header">
                   <div>
-                    <h2 class="card-title" id="recording-title">
-                      <svg class="icon"><use href="assets/icons.svg#i-mic"/></svg>Recording
+                    <h2 class="card-title" id="docs-title">
+                      <svg class="icon"><use href="assets/icons.svg#i-file"/></svg>Documents
                     </h2>
-                    <p class="card-subtitle">Upload the meeting recording to generate the transcript, summary and tasks.</p>
+                    <p class="card-subtitle">Attach specs, documentation or bug reports. The assistant can answer from them.</p>
                   </div>
-                </div>
-
-                <div class="list" id="recordings"></div>
-
-                <form id="upload-form" novalidate>
-                  <label class="dropzone" data-dropzone="file-chip" data-max-mb="500" tabindex="0">
-                    <svg class="icon"><use href="assets/icons.svg#i-upload"/></svg>
-                    <span><strong>Choose a file</strong> or drag it here</span>
-                    <span class="help">MP3, WAV, M4A, MP4, WEBM, OGG, FLAC, MOV · up to 500 MB</span>
-                    <input type="file" name="file" required
-                           accept=".mp3,.wav,.m4a,.mp4,.webm,.ogg,.flac,.mpeg,.mov,audio/*,video/*">
+                  <label class="btn btn-secondary btn-sm doc-upload">
+                    <svg class="icon"><use href="assets/icons.svg#i-upload"/></svg>Attach
+                    <input type="file" id="doc-file" class="sr-only"
+                           accept=".pdf,.docx,.md,.markdown,.txt,.csv,.json,.log,.yaml,.yml,.xml,.html,.htm">
                   </label>
-                  <div class="file-chip" id="file-chip" hidden>
-                    <svg class="icon"><use href="assets/icons.svg#i-file"/></svg>
-                    <span class="file-name"></span>
-                    <span class="file-size muted"></span>
-                    <button class="btn btn-primary btn-sm" type="submit">
-                      <svg class="icon"><use href="assets/icons.svg#i-upload"/></svg>Upload &amp; process
-                    </button>
-                  </div>
-                  <div class="progress" id="upload-progress" hidden>
-                    <div class="progress-bar"><span></span></div>
-                    <span class="small muted" aria-live="polite"></span>
-                  </div>
-                </form>
+                </div>
+                <div class="list" id="documents"></div>
               </section>
 
               <section class="card" aria-labelledby="transcript-heading" id="transcript-card" hidden>
@@ -200,12 +361,12 @@
                   </h2>
                 </div>
                 <div class="chat-log" id="chat-log" aria-live="polite">
-                  <div class="msg msg-ai">Hi! Ask me anything about this meeting: decisions, owners, deadlines.</div>
+                  <div class="msg msg-ai">Ask me anything: decisions, owners, deadlines, or what the attached documents say.</div>
                 </div>
-                <div class="chat-suggestions" id="chat-suggestions">
+                <div class="chat-suggestions">
                   <button class="chip" type="button" data-suggest>What are my tasks?</button>
                   <button class="chip" type="button" data-suggest>What was decided?</button>
-                  <button class="chip" type="button" data-suggest>Any open questions?</button>
+                  <button class="chip" type="button" data-suggest>What questions came up?</button>
                 </div>
                 <form class="chat-form" id="chat-form">
                   <label class="sr-only" for="chat-input">Your question</label>
@@ -214,7 +375,7 @@
                     <svg class="icon"><use href="assets/icons.svg#i-send"/></svg>
                   </button>
                 </form>
-                <p class="small muted chat-hint" id="chat-hint" hidden>Available once the recording has been processed.</p>
+                <p class="small muted chat-hint" id="chat-hint" hidden>Available once there's a recording, notes or a document.</p>
               </aside>
             </div>
           </div>
@@ -228,6 +389,7 @@
 <script src="js/api.js"></script>
 <script src="js/app.js"></script>
 <script src="js/tasks.js"></script>
+<script src="js/recorder.js"></script>
 <script src="js/pages/meeting.js"></script>
 </body>
 </html>
