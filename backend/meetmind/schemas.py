@@ -88,6 +88,7 @@ class MeetingPatch(_In):
 # ---------- tasks ----------
 
 TaskStatus = Literal["open", "in_progress", "done"]
+TaskPriority = Literal["low", "normal", "high", "urgent"]
 
 
 class TaskIn(_In):
@@ -95,6 +96,7 @@ class TaskIn(_In):
     description: str | None = Field(default=None, max_length=5000)
     assignee_email: Email | None = None
     due_date: date | None = None
+    priority: TaskPriority = "normal"
 
 
 class TaskPatch(_In):
@@ -105,6 +107,37 @@ class TaskPatch(_In):
     due_date: date | None = None
     status: TaskStatus | None = None
     approved: bool | None = None
+    priority: TaskPriority | None = None
+
+
+# ---------- live recording, notes, documents ----------
+
+class InstantMeetingIn(_In):
+    """Start a meeting right now (e.g. to record it immediately)."""
+    title: str | None = Field(default=None, max_length=200)
+    agenda: str | None = Field(default=None, max_length=5000)
+    timezone: TimeZoneName | None = None
+    participants: EmailList = []
+
+
+class LiveRecordingIn(_In):
+    mode: Literal["room", "online", "screen"]
+    mime_type: str = Field(default="audio/webm", max_length=100)
+
+
+class FinishRecordingIn(_In):
+    chunks: int = Field(ge=1, le=200_000)  # how many pieces the browser sent
+    duration_seconds: float | None = Field(default=None, ge=0)
+
+
+class RecordingPatch(_In):
+    important: bool
+
+
+class NoteIn(_In):
+    text: str = Field(min_length=1, max_length=4000)
+    kind: Literal["note", "bookmark"] = "note"
+    offset_seconds: float | None = Field(default=None, ge=0)  # position in the live recording
 
 
 # ---------- AI ----------
@@ -114,5 +147,23 @@ class ReviewIn(_In):
     approved_task_ids: list[uuid.UUID] = Field(default_factory=list, max_length=500)
 
 
+class ChatTurn(_In):
+    role: Literal["user", "assistant"]
+    content: str = Field(max_length=6000)
+
+
 class AskIn(_In):
     question: str = Field(min_length=1, max_length=1000)
+    history: list[ChatTurn] = Field(default_factory=list, max_length=12)  # earlier turns, for follow-up questions
+
+
+class AskAllIn(_In):
+    """A question across meetings; optionally limited to some meetings."""
+    question: str = Field(min_length=1, max_length=1000)
+    meeting_ids: list[uuid.UUID] = Field(default_factory=list, max_length=50)
+    history: list[ChatTurn] = Field(default_factory=list, max_length=12)
+
+
+class AssistantIn(_In):
+    """A plain-language instruction for the task assistant, e.g. "give the docs to Maya, ASAP"."""
+    instruction: str = Field(min_length=3, max_length=2000)
