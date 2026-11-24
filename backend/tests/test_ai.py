@@ -33,12 +33,13 @@ ANALYSIS = LLMAnalysis(
     summary="The team agreed to cut calendar sync and ship on January 12.",
     strategy_shifts=["Cut calendar sync from v1 to ship on January 12"],
     open_questions=["Who owns the pricing page copy?"],
+    follow_ups=[],
     tasks=[
-        LLMTask(title="Finish the API documentation", owner="Maya", due_text="by Friday", due_date="2026-12-18",
+        LLMTask(priority=None, title="Finish the API documentation", owner="Maya", due_text="by Friday", due_date="2026-12-18",
                 evidence="I'll have the API documentation finished by Friday."),
-        LLMTask(title="Book the stakeholder demo", owner="Jordan", due_text="next week", due_date=None,
+        LLMTask(priority=None, title="Book the stakeholder demo", owner="Jordan", due_text="next week", due_date=None,
                 evidence="Jordan, please book the stakeholder demo"),
-        LLMTask(title="Build a mobile app", owner="Alex", due_text=None, due_date=None,  # invented: not in transcript
+        LLMTask(priority=None, title="Build a mobile app", owner="Alex", due_text=None, due_date=None,  # invented: not in transcript
                 evidence="Alex will build the mobile app by Monday"),
     ],
 )
@@ -57,7 +58,7 @@ def make_deps(app, transcript=TRANSCRIPT, analysis=ANALYSIS, calls=None):
             calls.append(("analyze", ctx, text))
         return analysis, "fake:model"
 
-    return PipelineDeps(app.state.session_factory, app.state.settings, transcribe, analyze)
+    return PipelineDeps(app.state.session_factory, app.state.settings, transcribe, analyze, rag=lambda: app.state.rag)
 
 
 def upload(client, admin, meeting_id):
@@ -201,7 +202,8 @@ def test_ask_uses_visible_context(client, processed, monkeypatch):
     member, mid = processed["member"], processed["meeting_id"]
     res = client.post(f"/api/meetings/{mid}/ask", json={"question": "Who does the docs?"}, headers=auth(member))
     assert res.status_code == 200, res.json()
-    assert res.json() == {"answer": "Maya finishes the API docs by Friday [00:00:08].", "model": "fake:chat"}
+    assert res.json()["answer"] == "Maya finishes the API docs by Friday [00:00:08]."
+    assert res.json()["model"] == "fake:chat"
     assert "[00:00:08] I'll have the API documentation" in seen["context"]
     assert "TASKS:" not in seen["context"]  # drafts are hidden from members
 

@@ -4,9 +4,32 @@ from fastapi.testclient import TestClient
 
 from meetmind import create_app, notifications, task_queue
 from meetmind.config import Settings
+from meetmind.ai.rag import MemoryStore, RAGService
 from meetmind.db import Base
 
 PASSWORD = "correct-horse-battery"
+
+
+class FakeEmbedder:
+    """Deterministic bag-of-words vectors: texts sharing words get similar vectors (no AI service needed)."""
+
+    DIM = 256
+
+    def _vec(self, text):
+        import hashlib
+        import re
+
+        v = [0.0] * self.DIM
+        for w in re.findall(r"[a-z0-9]+", text.lower()):
+            if len(w) > 2:
+                v[int(hashlib.md5(w.encode()).hexdigest(), 16) % self.DIM] += 1.0
+        return v
+
+    def embed_documents(self, texts):
+        return [self._vec(t) for t in texts]
+
+    def embed_query(self, text):
+        return self._vec(text)
 
 
 @pytest.fixture
@@ -23,6 +46,7 @@ def settings(tmp_path):
 @pytest.fixture
 def app(settings):
     app = create_app(settings)
+    app.state.rag = RAGService(settings, MemoryStore(), FakeEmbedder())  # in-memory search index
     Base.metadata.create_all(app.state.engine)
     yield app
     Base.metadata.drop_all(app.state.engine)
