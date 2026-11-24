@@ -69,6 +69,8 @@ class Meeting(TimestampMixin, Base):
     summary: Mapped[str | None] = mapped_column(Text)
     strategy_shifts: Mapped[list | None] = mapped_column(JSONType)
     open_questions: Mapped[list | None] = mapped_column(JSONType)
+    # Questions raised during the meeting and the answers given: [{"question", "answer", "asked_by", "answered_by"}]
+    follow_ups: Mapped[list | None] = mapped_column(JSONType)
     ai_model: Mapped[str | None] = mapped_column(String(120))  # which model wrote the analysis
     # LangGraph thread waiting for the admin's review (resumed by POST /meetings/{id}/review)
     ai_thread_id: Mapped[str | None] = mapped_column(String(100))
@@ -84,6 +86,12 @@ class Meeting(TimestampMixin, Base):
     )
     tasks: Mapped[list["Task"]] = relationship(
         back_populates="meeting", cascade="all, delete-orphan", order_by="Task.created_at"
+    )
+    notes: Mapped[list["MeetingNote"]] = relationship(
+        back_populates="meeting", cascade="all, delete-orphan", order_by="MeetingNote.created_at"
+    )
+    documents: Mapped[list["Document"]] = relationship(
+        back_populates="meeting", cascade="all, delete-orphan", order_by="Document.created_at"
     )
 
 
@@ -111,8 +119,14 @@ class Recording(TimestampMixin, Base):
     storage_path: Mapped[str] = mapped_column(String(500))
     content_type: Mapped[str | None] = mapped_column(String(100))
     size_bytes: Mapped[int] = mapped_column(BigInteger)
-    status: Mapped[str] = mapped_column(String(20), default="queued")  # queued | processing | done | failed
+    # recording (live, still receiving pieces) | queued | processing | done | failed
+    status: Mapped[str] = mapped_column(String(20), default="queued")
     error: Mapped[str | None] = mapped_column(Text)
+    # upload | room (in-person, microphone) | online (other meeting app's audio + mic) | screen (with video)
+    mode: Mapped[str] = mapped_column(String(20), default="upload")
+    duration_seconds: Mapped[float | None] = mapped_column()
+    important: Mapped[bool] = mapped_column(default=False)  # starred by an admin: keep and highlight
+    chunks_received: Mapped[int] = mapped_column(default=0)  # live recordings arrive in numbered pieces
 
     meeting: Mapped[Meeting] = relationship(back_populates="recordings")
 
@@ -151,6 +165,60 @@ class Task(TimestampMixin, Base):
     # when it could not be matched to a participant
     evidence: Mapped[str | None] = mapped_column(Text)
     suggested_owner: Mapped[str | None] = mapped_column(String(120))
+    priority: Mapped[str] = mapped_column(String(10), default="normal")  # low | normal | high | urgent
+    # Reminder emails already sent (so each is sent once)
+    due_reminder_sent_on: Mapped[date | None] = mapped_column(Date)
+    overdue_reminder_sent_on: Mapped[date | None] = mapped_column(Date)
 
     meeting: Mapped[Meeting] = relationship(back_populates="tasks")
     assignee: Mapped[User | None] = relationship()
+
+
+class MeetingNote(TimestampMixin, Base):
+    """Notes typed during or after a meeting. `offset_seconds` = position in the recording (live notes)."""
+    __tablename__ = "meeting_notes"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    meeting_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("meetings.id", ondelete="CASCADE"), index=True)
+    author_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    kind: Mapped[str] = mapped_column(String(20), default="note")  # note | bookmark (an important moment)
+    text: Mapped[str] = mapped_column(Text)
+    offset_seconds: Mapped[float | None] = mapped_column()
+
+    meeting: Mapped[Meeting] = relationship(back_populates="notes")
+    author: Mapped[User | None] = relationship()
+
+
+class Document(TimestampMixin, Base):
+    """Files attached to a meeting (specs, documentation, bug reports) that the AI can answer from."""
+    __tablename__ = "documents"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    meeting_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("meetings.id", ondelete="CASCADE"), index=True)
+    uploaded_by_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    filename: Mapped[str] = mapped_column(String(255))
+    storage_path: Mapped[str] = mapped_column(String(500))
+    content_type: Mapped[str | None] = mapped_column(String(100))
+    size_bytes: Mapped[int] = mapped_column(BigInteger)
+    status: Mapped[str] = mapped_column(String(20), default="queued")  # queued | ready | failed
+    error: Mapped[str | None] = mapped_column(Text)
+    # Extracted text, one entry per page (or one for plain text files)
+    pages: Mapped[list | None] = mapped_column(JSONType)
+
+    meeting: Mapped[Meeting] = relationship(back_populates="documents")
+    uploaded_by: Mapped[User | None] = relationship()
+
+
+class AgentRun(TimestampMixin, Base):
+    """One instruction to the task assistant: the plan it proposed and what happened (audit log)."""
+    __tablename__ = "agent_runs"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    meeting_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("meetings.id", ondelete="CASCADE"), index=True)
+    user_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    instruction: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(20), default="proposed")  # proposed | done | cancelled | failed
+    plan: Mapped[dict | None] = mapped_column(JSONType)
+    result: Mapped[dict | None] = mapped_column(JSONType)
+    ai_model: Mapped[str | None] = mapped_column(String(120))
