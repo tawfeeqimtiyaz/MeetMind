@@ -36,3 +36,10 @@ langchain-groq==1.2.1
 langchain-ollama==1.1.0
 groq==1.7.0
 langsmith==0.15.0
+
+# RAG (Phase 6): vector database client (server runs in its own container)
+chromadb-client==1.5.9
+
+# Reading attached documents (PDF, Word)
+pypdf==7.1.1
+python-docx==1.2.0
