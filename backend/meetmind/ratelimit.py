@@ -10,7 +10,7 @@ import time
 from fastapi import Depends, Request
 from limits import RateLimitItem, parse
 from limits.storage import storage_from_string
-from limits.strategies import FixedWindowRateLimiter
+from limits.strategies import MovingWindowRateLimiter
 
 from .errors import APIError
 
@@ -20,7 +20,7 @@ log = logging.getLogger(__name__)
 class RateLimiter:
     def __init__(self, storage_uri: str, enabled: bool = True):
         self.enabled = enabled
-        self._strategy = FixedWindowRateLimiter(storage_from_string(storage_uri)) if enabled else None
+        self._strategy = MovingWindowRateLimiter(storage_from_string(storage_uri)) if enabled else None  # sliding window: no burst at minute boundaries
 
     def check(self, item: RateLimitItem, scope: str, key: str) -> int | None:
         """Count one hit. Returns None if allowed, else seconds until the window resets."""
