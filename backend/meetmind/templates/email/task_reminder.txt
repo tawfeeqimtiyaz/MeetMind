@@ -1,0 +1,21 @@
+Hi{% if name %} {{ name }}{% endif %},
+
+A quick reminder about your MeetMind tasks.
+{% if overdue %}
+
+OVERDUE
+{% for t in overdue %}
+- {% if t.priority == "urgent" %}[URGENT] {% endif %}{{ t.title }} (was due {{ t.due }}, {{ t.meeting }})
+{% endfor %}
+{% endif %}
+{% if due_soon %}
+
+DUE SOON
+{% for t in due_soon %}
+- {% if t.priority == "urgent" %}[URGENT] {% endif %}{{ t.title }} (due {{ t.due }}, {{ t.meeting }})
+{% endfor %}
+{% endif %}
+
+Open my tasks: {{ tasks_url }}
+
+- MeetMind

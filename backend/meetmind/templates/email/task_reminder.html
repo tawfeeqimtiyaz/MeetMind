@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block preheader %}{% if overdue %}{{ overdue|length }} overdue{% endif %}{% if overdue and due_soon %}, {% endif %}{% if due_soon %}{{ due_soon|length }} due soon{% endif %}.{% endblock %}
+{% block content %}
+<h1 style="margin:0 0 12px;font-size:22px;line-height:30px;">Your tasks need attention</h1>
+<p style="margin:0 0 16px;font-size:15px;line-height:24px;color:#334155;">Hi{% if name %} {{ name }}{% endif %}, a quick reminder about your MeetMind tasks.</p>
+{% if overdue %}
+<div style="font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#b91c1c;margin:0 0 8px;">Overdue</div>
+{% for t in overdue %}
+<div style="margin:0 0 8px;padding:12px 14px;border:1px solid #fecaca;background:#fef2f2;border-radius:10px;">
+  <div style="font-size:15px;font-weight:600;">{% if t.priority == "urgent" %}<span style="color:#b91c1c;">URGENT · </span>{% endif %}{{ t.title }}</div>
+  <div style="font-size:13px;color:#991b1b;">Was due {{ t.due }} · {{ t.meeting }}</div>
+</div>
+{% endfor %}
+{% endif %}
+{% if due_soon %}
+<div style="font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#c2410c;margin:16px 0 8px;">Due soon</div>
+{% for t in due_soon %}
+<div style="margin:0 0 8px;padding:12px 14px;border:1px solid #e2e8f0;border-radius:10px;">
+  <div style="font-size:15px;font-weight:600;">{% if t.priority == "urgent" %}<span style="color:#b91c1c;">URGENT · </span>{% endif %}{{ t.title }}</div>
+  <div style="font-size:13px;color:#5b6b82;">Due {{ t.due }} · {{ t.meeting }}</div>
+</div>
+{% endfor %}
+{% endif %}
+{% with url=tasks_url, label="Open my tasks" %}{% include "_button.html" %}{% endwith %}
+{% endblock %}
