@@ -1,4 +1,4 @@
-/* Meeting page: results, AI task review, recording upload/processing, transcript, Q&A. */
+/* Meeting page: live recording, notes, results, AI task review, task assistant, documents, playback, Q&A. */
 (async function () {
   "use strict";
   const M = window.MeetMind;
@@ -8,7 +8,8 @@
   const params = new URLSearchParams(location.search);
   const id = params.get("id");
   const justCreated = params.has("created");
-  if (justCreated) history.replaceState(null, "", "meeting.html?id=" + encodeURIComponent(id));
+  const wantsRecording = params.has("record");
+  if (justCreated || wantsRecording) history.replaceState(null, "", "meeting.html?id=" + encodeURIComponent(id));
 
   const user = await M.requireUser();
   const isAdmin = user.role === "admin";
@@ -24,12 +25,19 @@
   let pollTimer = null;
   let lastStatus = null;
   let transcriptLoaded = false;
+  let recorder = null; // MeetingRecorder while recording on this page
+  let firstRender = true;
 
   const BUSY = new Set(["queued", "processing"]);
   const isBusy = (m) => m.status === "processing" || m.recordings.some((r) => BUSY.has(r.status));
   const shortModel = (name) => String(name || "AI").split(/[:/]/).pop();
+  const pad = (n) => String(n).padStart(2, "0");
+  const timestamp = (sec) => {
+    const s = Math.floor(sec || 0);
+    return `${pad(Math.floor(s / 3600))}:${pad(Math.floor((s % 3600) / 60))}:${pad(s % 60)}`;
+  };
 
-  /* ---------- loading & polling ---------- */
+  /* ================= loading & polling ================= */
 
   async function load() {
     clearTimeout(pollTimer);
@@ -42,13 +50,14 @@
         return;
       }
       if (!meeting) { M.showPageError(loadingEl, err); return; }
-      pollTimer = setTimeout(load, 8000); // keep showing what we have; try again
+      pollTimer = setTimeout(load, 8000);
       return;
     }
     if (lastStatus && lastStatus !== meeting.status) announce(meeting.status);
     lastStatus = meeting.status;
     render();
-    if (isBusy(meeting)) pollTimer = setTimeout(load, 4000);
+    const docsWaiting = meeting.documents.some((d) => d.status === "queued");
+    if (isBusy(meeting) || docsWaiting) pollTimer = setTimeout(load, 4000);
   }
 
   function announce(status) {
@@ -58,7 +67,7 @@
     else if (status === "failed") toast("Processing failed. See the message at the top.", "error");
   }
 
-  /* ---------- render ---------- */
+  /* ================= render ================= */
 
   function render() {
     loadingEl.replaceChildren();
@@ -66,8 +75,9 @@
     document.title = meeting.title + " · MeetMind";
 
     $("title").textContent = meeting.title;
-    // Members don't see AI drafts, so "review" just means "not ready yet" for them
-    replace($("status"), badge(!isAdmin && meeting.status === "review" ? "processing" : meeting.status));
+    $("rename").hidden = !isAdmin;
+    const shown = !isAdmin && meeting.status === "review" ? "processing" : meeting.status;
+    replace($("status"), meeting.status === "recording" ? h("span", { class: "badge badge-recording" }, "● Recording") : badge(shown));
     replace($("meta"),
       h("span", {}, icon("i-clock"), formatDateTime(meeting.scheduled_at)),
       h("span", {}, icon("i-users"), plural(meeting.participant_count, "participant")),
@@ -79,47 +89,64 @@
     renderSummary();
     renderBullets("shifts", meeting.strategy_shifts);
     renderBullets("questions", meeting.open_questions);
+    renderFollowUps();
     renderTasks();
     renderRecordings();
+    renderNotes();
+    renderDocuments();
     renderPeople();
     renderTranscriptCard();
     renderChatState();
+    $("assistant-card").hidden = !isAdmin;
+
+    if (firstRender) {
+      firstRender = false;
+      if (wantsRecording && isAdmin) {
+        $("recording-card").scrollIntoView({ behavior: "smooth", block: "start" });
+        $("rec-start").focus();
+      }
+      if (isAdmin) recoverIfInterrupted();
+    }
   }
 
   function renderBanner() {
     const banner = $("banner");
     const latest = meeting.recordings[meeting.recordings.length - 1];
+    const liveElsewhere = meeting.recordings.find((r) => r.status === "recording") && !recorder;
 
-    if (isBusy(meeting)) {
+    if (liveElsewhere && isAdmin) {
+      const rec = meeting.recordings.find((r) => r.status === "recording");
+      replace(banner, h("div", { class: "alert alert-info banner" }, icon("i-mic"),
+        h("div", {}, h("strong", {}, "A live recording is open. "),
+          `${plural(rec.chunks_received || 0, "piece")} saved so far. If it was interrupted, process what was recorded or discard it.`),
+        h("button", { class: "btn btn-secondary btn-sm", type: "button", onclick: () => finishInterrupted(rec) }, "Process it"),
+        h("button", { class: "btn btn-ghost btn-sm", type: "button", onclick: () => discardRecording(rec) }, "Discard")));
+    } else if (isBusy(meeting)) {
       replace(banner, h("div", { class: "alert alert-info banner" },
         h("span", { class: "spinner", "aria-hidden": "true" }),
         h("div", {}, h("strong", {}, "Processing the recording… "),
-          "Transcription and AI analysis usually take under a minute. This page updates by itself.")));
+          "Transcription and AI analysis usually take under a minute (longer for long meetings). This page updates by itself.")));
     } else if (meeting.status === "failed") {
-      replace(banner, h("div", { class: "alert alert-error banner" },
-        icon("i-info"),
+      replace(banner, h("div", { class: "alert alert-error banner" }, icon("i-info"),
         h("div", {}, h("strong", {}, "Processing failed. "), (latest && latest.error) || "Something went wrong."),
         isAdmin && latest ? h("button", { class: "btn btn-secondary btn-sm", type: "button", onclick: retry }, "Retry processing") : null));
     } else if (meeting.status === "review") {
       const n = meeting.tasks.filter((t) => !t.approved).length;
       replace(banner, h("div", { class: "alert alert-info banner" }, icon("i-shield"),
         isAdmin
-          ? h("div", {}, h("strong", {}, `AI drafted ${plural(n, "task")}. `), "Review them below. Nothing is shared with owners until you approve.")
+          ? h("div", {}, h("strong", {}, `AI drafted ${plural(n, "task")}. `), "Review them below, or tell the task assistant what to do. Nothing is shared until you approve.")
           : h("div", {}, "The AI results are being reviewed by an admin.")));
     } else if (justCreated && meeting.status === "scheduled" && !meeting.recordings.length) {
       replace(banner, h("div", { class: "alert alert-info banner" }, icon("i-info"),
-        h("div", {}, h("strong", {}, "Meeting created. "), "After the meeting, upload its recording below.")));
+        h("div", {}, h("strong", {}, "Meeting created. "), "Start recording when the meeting begins, or upload a recording afterwards.")));
     } else {
       banner.replaceChildren();
     }
   }
 
   async function retry() {
-    try {
-      await api.post(`/meetings/${id}/reprocess`);
-      toast("Processing restarted.");
-      load();
-    } catch (err) { toast(err.message, "error"); }
+    try { await api.post(`/meetings/${id}/reprocess`); toast("Processing restarted."); load(); }
+    catch (err) { toast(err.message, "error"); }
   }
 
   function renderSummary() {
@@ -129,7 +156,7 @@
     } else {
       $("ai-model").replaceChildren();
       const text = isBusy(meeting) ? "The summary appears here once processing finishes."
-        : isAdmin ? "Upload the recording after the meeting to get a summary, decisions and tasks."
+        : isAdmin ? "Record the meeting above (or upload a recording) to get a summary, decisions, Q&A and tasks."
         : "The summary appears here after the meeting has been processed.";
       replace($("summary"), h("p", { class: "muted" }, text));
     }
@@ -140,7 +167,17 @@
     replace($(name), (items || []).map((x) => h("li", {}, x)));
   }
 
-  /* ---------- tasks ---------- */
+  function renderFollowUps() {
+    const items = meeting.follow_ups || [];
+    $("followups-card").hidden = !items.length;
+    replace($("followups"), items.map((f) => h("div", { class: "qa" },
+      h("p", { class: "qa-q" }, h("span", { class: "qa-tag" }, "Q"), f.question, f.asked_by ? h("span", { class: "muted small" }, " · " + f.asked_by) : null),
+      h("p", { class: "qa-a" + (f.answer ? "" : " muted") }, h("span", { class: "qa-tag qa-tag-a" }, "A"),
+        f.answer || "Not answered in the meeting", f.answered_by ? h("span", { class: "muted small" }, " · " + f.answered_by) : null),
+    )));
+  }
+
+  /* ================= tasks ================= */
 
   function ownerOptions(select, selectedEmail) {
     const seen = new Set();
@@ -152,6 +189,11 @@
     if (selectedEmail && !seen.has(selectedEmail)) opts.push(h("option", { value: selectedEmail, selected: true }, selectedEmail));
     replace(select, opts);
     return select;
+  }
+
+  function prioritySelect(value, label) {
+    return h("select", { class: "input input-sm", "aria-label": label },
+      ["low", "normal", "high", "urgent"].map((p) => h("option", { value: p, selected: p === (value || "normal") }, p[0].toUpperCase() + p.slice(1))));
   }
 
   async function patchTask(task, body, control) {
@@ -175,6 +217,8 @@
       owner.addEventListener("change", () => patchTask(t, { assignee_email: owner.value || null }, owner));
       const due = h("input", { type: "date", class: "input input-sm", value: t.due_date || "", "aria-label": "Due date for " + t.title });
       due.addEventListener("change", () => patchTask(t, { due_date: due.value || null }, due));
+      const prio = prioritySelect(t.priority, "Priority for " + t.title);
+      prio.addEventListener("change", () => patchTask(t, { priority: prio.value }, prio));
 
       const el = h("div", { class: "draft" },
         keep,
@@ -184,6 +228,7 @@
           h("div", { class: "draft-fields" },
             h("label", {}, h("span", { class: "small muted" }, "Owner"), owner),
             h("label", {}, h("span", { class: "small muted" }, "Due"), due),
+            h("label", {}, h("span", { class: "small muted" }, "Priority"), prio),
           ),
           t.suggested_owner && !t.assignee && !t.assignee_email
             ? h("p", { class: "small muted" }, `The AI heard “${t.suggested_owner}” but couldn’t match a participant.`) : null,
@@ -222,11 +267,8 @@
 
   async function deleteTask(task) {
     if (!confirm(`Delete the task “${task.title}”?`)) return;
-    try {
-      await api.del("/tasks/" + task.id);
-      toast("Task deleted.");
-      load();
-    } catch (err) { toast(err.message, "error"); }
+    try { await api.del("/tasks/" + task.id); toast("Task deleted."); load(); }
+    catch (err) { toast(err.message, "error"); }
   }
 
   function renderTasks() {
@@ -235,8 +277,8 @@
     const reviewing = isAdmin && meeting.status === "review" && drafts.length > 0;
 
     $("tasks-subtitle").textContent = reviewing
-      ? "Drafted by AI from the transcript. Keep the right ones, fix owners and dates, then approve."
-      : approved.length ? (isAdmin ? "Owners are emailed when tasks are approved." : "Tick your tasks when they’re done.") : "";
+      ? "Drafted by AI from the recording and notes. Keep the right ones, fix owners, dates and priority, then approve."
+      : approved.length ? (isAdmin ? "Owners are emailed when tasks are approved, and reminded before deadlines." : "Tick your tasks when they’re done.") : "";
     replace($("review-panel"), reviewing ? reviewPanel(drafts) : null);
 
     const list = $("task-list");
@@ -249,7 +291,6 @@
     } else {
       replace(list, reviewing ? null : h("p", { class: "muted" }, "No action items yet."));
     }
-
     $("add-task").hidden = !isAdmin;
     if (isAdmin) ownerOptions($("new-task-owner"), "");
   }
@@ -264,6 +305,7 @@
         title: data.get("title"),
         assignee_email: data.get("assignee_email") || null,
         due_date: data.get("due_date") || null,
+        priority: data.get("priority") || "normal",
       });
       form.reset();
       toast("Task added.");
@@ -271,45 +313,258 @@
     } catch (err) { toast(err.message, "error"); }
   });
 
-  /* ---------- recordings ---------- */
+  /* ================= task assistant ================= */
+
+  const assistantForm = $("assistant-form");
+  document.querySelectorAll("[data-instruction]").forEach((chip) => chip.addEventListener("click", () => {
+    $("assistant-input").value = chip.textContent;
+    $("assistant-input").focus();
+  }));
+
+  assistantForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (!assistantForm.reportValidity()) return;
+    const button = assistantForm.querySelector("button[type=submit]");
+    button.disabled = true;
+    replace($("assistant-plan"), loading("Preparing a plan…"));
+    try {
+      const { run } = await api.post(`/meetings/${id}/assistant/plan`, { instruction: $("assistant-input").value });
+      showPlan(run);
+    } catch (err) {
+      replace($("assistant-plan"), h("div", { class: "alert alert-error" }, err.message));
+    } finally {
+      button.disabled = false;
+    }
+  });
+
+  function showPlan(run) {
+    const plan = run.plan || { steps: [], warnings: [] };
+    const box = $("assistant-plan");
+    const confirmBtn = h("button", { class: "btn btn-primary", type: "button", disabled: !plan.steps.length }, "Confirm");
+    const cancelBtn = h("button", { class: "btn btn-ghost", type: "button" }, "Cancel");
+    replace(box, h("div", { class: "plan" },
+      h("p", { class: "plan-title" }, plan.steps.length ? "Here’s the plan. Nothing has changed yet:" : "I couldn’t turn that into any changes."),
+      h("ul", { class: "plan-steps" }, plan.steps.map((s) => h("li", { class: "plan-step plan-" + s.op },
+        h("span", { class: "plan-icon", "aria-hidden": "true" }, s.op === "discard" ? "✕" : s.op === "create" ? "+" : "✓"),
+        s.preview))),
+      plan.notify_owners && plan.steps.some((s) => s.op !== "discard")
+        ? h("p", { class: "small" }, "✉ Each owner will be emailed" + (plan.message ? `: “${plan.message}”` : ".")) : null,
+      plan.warnings.length ? h("div", { class: "alert alert-warning" }, h("div", {}, plan.warnings.map((w) => h("div", {}, "⚠ " + w)))) : null,
+      h("div", { class: "row" }, confirmBtn, cancelBtn, h("span", { class: "small muted" }, "Planned by " + shortModel(run.ai_model))),
+    ));
+    confirmBtn.addEventListener("click", async () => {
+      confirmBtn.disabled = cancelBtn.disabled = true;
+      try {
+        const res = await api.post(`/agent-runs/${run.id}/confirm`);
+        toast(`Done: ${plural(res.run.result.changed, "task")} updated${res.run.result.discarded ? `, ${res.run.result.discarded} discarded` : ""}.`);
+        replace(box);
+        $("assistant-input").value = "";
+        load();
+      } catch (err) {
+        toast(err.message, "error");
+        confirmBtn.disabled = cancelBtn.disabled = false;
+      }
+    });
+    cancelBtn.addEventListener("click", async () => {
+      try { await api.post(`/agent-runs/${run.id}/cancel`); } catch (e) { /* already gone */ }
+      replace(box);
+    });
+  }
+
+  /* ================= recording: live + upload + playback ================= */
+
+  function selectTab(live) {
+    $("tab-live").setAttribute("aria-selected", String(live));
+    $("tab-upload").setAttribute("aria-selected", String(!live));
+    $("panel-live").hidden = !live;
+    $("panel-upload").hidden = live;
+  }
+  $("tab-live").addEventListener("click", () => selectTab(true));
+  $("tab-upload").addEventListener("click", () => selectTab(false));
+
+  function currentMode() { return (document.querySelector("input[name=mode]:checked") || {}).value || "room"; }
+  function updateModeHelp() {
+    const mode = currentMode();
+    $("share-help").hidden = mode === "room";
+    $("noise").closest(".field").hidden = mode !== "room";
+  }
+  document.querySelectorAll("input[name=mode]").forEach((r) => r.addEventListener("change", updateModeHelp));
+  updateModeHelp();
+
+  async function fillMicrophones() {
+    const mics = await M.MeetingRecorder.microphones();
+    const select = $("mic");
+    const current = select.value;
+    replace(select, h("option", { value: "" }, "Default microphone"),
+      mics.filter((d) => d.deviceId && d.deviceId !== "default").map((d, i) =>
+        h("option", { value: d.deviceId, selected: d.deviceId === current }, d.label || `Microphone ${i + 1}`)));
+  }
+  if (M.MeetingRecorder.supported()) fillMicrophones();
 
   function renderRecordings() {
     $("recording-card").hidden = !isAdmin;
     if (!isAdmin) return;
-    replace($("recordings"), meeting.recordings.slice().reverse().map((r) =>
-      h("div", { class: "list-item list-item-static" },
-        icon("i-file"),
+    const busy = isBusy(meeting) || meeting.recordings.some((r) => r.status === "recording");
+    $("rec-start").disabled = busy && !recorder;
+    $("upload-form").classList.toggle("is-disabled", busy);
+    $("upload-form").querySelector("input[type=file]").disabled = busy;
+
+    replace($("recordings"), meeting.recordings.slice().reverse().map((r) => {
+      const playable = r.status === "done" || r.status === "failed";
+      return h("div", { class: "list-item list-item-static recording-row" },
+        h("button", { class: "btn btn-ghost btn-icon btn-sm", type: "button", disabled: !playable,
+          "aria-label": "Play " + r.original_filename, title: "Play", onclick: () => play(r) }, "▶"),
         h("div", {},
-          h("div", { class: "title" }, r.original_filename),
+          h("div", { class: "title" }, r.important ? "★ " : "", r.original_filename),
           h("div", { class: "meta" },
+            h("span", {}, { room: "In the room", online: "Online meeting", screen: "Online + screen", upload: "Uploaded" }[r.mode] || r.mode),
+            r.duration_seconds ? h("span", {}, timestamp(r.duration_seconds)) : null,
             h("span", {}, M.formatBytes(r.size_bytes)),
             h("span", {}, formatDateTime(r.created_at)),
             r.error ? h("span", { class: "text-danger" }, r.error) : null,
           ),
         ),
-        BUSY.has(r.status)
-          ? h("span", { class: "loading-inline" }, h("span", { class: "spinner", "aria-hidden": "true" }), r.status === "queued" ? "Queued" : "Processing")
+        BUSY.has(r.status) || r.status === "recording"
+          ? h("span", { class: "loading-inline" }, h("span", { class: "spinner", "aria-hidden": "true" }),
+              r.status === "recording" ? "Recording" : r.status === "queued" ? "Queued" : "Processing")
           : badge(r.status === "done" ? "completed" : r.status),
-      )));
-    $("upload-form").classList.toggle("is-disabled", isBusy(meeting));
-    $("upload-form").querySelector("input[type=file]").disabled = isBusy(meeting);
+        h("div", { class: "row-actions" },
+          h("button", { class: "btn btn-ghost btn-sm" + (r.important ? " is-starred" : ""), type: "button",
+            title: r.important ? "Remove star" : "Star as important (highlighted in reminders)",
+            onclick: () => star(r) }, r.important ? "★ Starred" : "☆ Star"),
+          playable ? h("button", { class: "btn btn-ghost btn-sm text-danger", type: "button", onclick: () => discardRecording(r) }, "Delete") : null,
+        ),
+      );
+    }));
   }
+
+  async function star(r) {
+    try { await api.patch(`/recordings/${r.id}`, { important: !r.important }); load(); }
+    catch (err) { toast(err.message, "error"); }
+  }
+
+  async function discardRecording(r) {
+    const live = r.status === "recording";
+    if (!confirm(live ? "Discard this unfinished recording?" : `Delete “${r.original_filename}”? The transcript and AI results stay.`)) return;
+    try { await api.del(`/recordings/${r.id}`); toast(live ? "Recording discarded." : "Recording deleted."); load(); }
+    catch (err) { toast(err.message, "error"); }
+  }
+
+  async function finishInterrupted(r) {
+    try {
+      await api.post(`/recordings/${r.id}/finish`, { chunks: r.chunks_received || 1, duration_seconds: null });
+      toast("Processing the recorded part.");
+      load();
+    } catch (err) {
+      toast(err.code === "missing_chunks"
+        ? "Some pieces never arrived. MeetMind will process what it has automatically within a few hours."
+        : err.message, "error");
+    }
+  }
+
+  async function recoverIfInterrupted() {
+    try {
+      const res = await M.recoverInterrupted(id);
+      if (res && res.uploaded) { toast(`Recovered ${plural(res.uploaded, "piece")} of an interrupted recording.`); load(); }
+    } catch (e) { /* nothing to recover */ }
+  }
+
+  /* --- live recording controls --- */
+
+  function setRecordingUi(on) {
+    $("live-setup").hidden = on;
+    $("live-running").hidden = !on;
+    $("tab-upload").disabled = on;
+  }
+
+  $("rec-start").addEventListener("click", async () => {
+    if (!M.MeetingRecorder.supported()) { toast("This browser can’t record. Please use Chrome or Edge.", "error"); return; }
+    const mode = currentMode();
+    if (mode !== "room" && !M.MeetingRecorder.canCaptureOtherApps()) {
+      toast("Capturing another app’s sound needs Chrome or Edge on a computer.", "error"); return;
+    }
+    $("rec-start").disabled = true;
+    recorder = new M.MeetingRecorder(id, {
+      time: ({ seconds }) => { $("rec-timer").textContent = timestamp(seconds); updateNoteWhen(); },
+      level: ({ level, tooQuiet, state }) => {
+        $("level-bar").style.width = Math.round(level * 100) + "%";
+        const hint = $("level-hint");
+        if (state === "paused") { hint.textContent = "Paused"; hint.className = "small muted"; }
+        else if (tooQuiet) { hint.textContent = "Very quiet: move the laptop closer to the speakers or use an external microphone."; hint.className = "small text-warning"; }
+        else { hint.textContent = level > 0.08 ? "Good sound level" : "Listening…"; hint.className = "small muted"; }
+      },
+      state: ({ state }) => {
+        $("rec-state").textContent = state === "paused" ? "PAUSED" : state === "finishing" ? "SAVING" : "REC";
+        $("rec-badge").classList.toggle("is-paused", state !== "recording");
+        $("rec-pause").textContent = state === "paused" ? "Resume" : "Pause";
+        $("rec-pause").disabled = $("rec-mark").disabled = state === "finishing";
+        $("rec-stop").disabled = state === "finishing";
+      },
+      upload: ({ waiting, ok, error }) => {
+        $("upload-status").textContent = error ? "Upload problem: " + error
+          : ok ? (waiting ? `Saving… ${plural(waiting, "piece")} waiting` : "All audio saved so far ✓")
+          : `Offline: ${plural(waiting, "piece")} waiting, will retry automatically. Keep this page open.`;
+      },
+    });
+    try {
+      await recorder.start({ mode, deviceId: $("mic").value || null, noiseReduction: $("noise").checked });
+      setRecordingUi(true);
+      toast("Recording started.");
+      fillMicrophones();
+      load();
+    } catch (err) {
+      recorder = null;
+      $("rec-start").disabled = false;
+      const msg = err && err.name === "NotAllowedError"
+        ? "Permission was denied. Allow microphone (and screen) access in the browser’s address bar, then try again."
+        : (err && err.message) || "Could not start recording.";
+      toast(msg, "error");
+    }
+  });
+
+  $("rec-pause").addEventListener("click", () => {
+    if (!recorder) return;
+    if (recorder.state === "paused") recorder.resume(); else recorder.pause();
+  });
+
+  $("rec-mark").addEventListener("click", async () => {
+    if (!recorder) return;
+    const at = recorder.elapsed();
+    try {
+      await api.post(`/meetings/${id}/notes`, { text: "Important moment", kind: "bookmark", offset_seconds: Math.round(at) });
+      toast("⭐ Marked at " + timestamp(at));
+      refreshNotes();
+    } catch (err) { toast(err.message, "error"); }
+  });
+
+  $("rec-stop").addEventListener("click", async () => {
+    if (!recorder || !confirm("Stop recording and process the meeting?")) return;
+    $("upload-status").textContent = "Finishing upload…";
+    try {
+      await recorder.stop();
+      recorder = null;
+      setRecordingUi(false);
+      toast("Recording saved. Processing has started.");
+      load();
+    } catch (err) {
+      toast(err.message, "error");
+    }
+  });
+
+  /* --- upload a file --- */
 
   $("upload-form").addEventListener("submit", async (e) => {
     e.preventDefault();
     const form = e.currentTarget;
-    const input = form.querySelector("input[type=file]");
-    const file = input.files[0];
+    const file = form.querySelector("input[type=file]").files[0];
     if (!file) return;
     if (isBusy(meeting)) { toast("Wait until the current recording has finished processing.", "error"); return; }
-
     const progress = $("upload-progress");
     const bar = progress.querySelector(".progress-bar span");
     const label = progress.querySelector("[aria-live]");
     const button = form.querySelector("button[type=submit]");
     const body = new FormData();
     body.append("file", file);
-
     button.disabled = true;
     progress.hidden = false;
     try {
@@ -330,7 +585,144 @@
     }
   });
 
-  /* ---------- people ---------- */
+  /* --- playback (and jumping to a moment) --- */
+
+  let mediaEl = null;
+  let mediaFor = null;
+
+  async function play(r, at) {
+    try {
+      if (mediaFor !== r.id) {
+        const { url, content_type } = await api.get(`/recordings/${r.id}/playback`);
+        const video = (content_type || "").startsWith("video");
+        mediaEl = h(video ? "video" : "audio", { controls: true, preload: "metadata", src: url, class: "media" });
+        mediaFor = r.id;
+        replace($("player"), h("div", { class: "small muted" }, "▶ " + r.original_filename), mediaEl);
+        $("player").hidden = false;
+      }
+      if (at != null) {
+        const seek = () => { mediaEl.currentTime = at; mediaEl.play().catch(() => {}); };
+        if (mediaEl.readyState >= 1) seek(); else mediaEl.addEventListener("loadedmetadata", seek, { once: true });
+      } else {
+        mediaEl.play().catch(() => {});
+      }
+      $("player").scrollIntoView({ behavior: "smooth", block: "nearest" });
+    } catch (err) { toast(err.message, "error"); }
+  }
+
+  /* jump to a moment of the meeting's main recording (used by transcript lines and chat sources) */
+  function seekTo(seconds) {
+    const rec = meeting.recordings.slice().reverse().find((r) => r.status === "done");
+    if (!rec) { toast("The recording isn’t available to play.", "error"); return; }
+    if (!isAdmin) {
+      // members can play too; the card is admin-only, so show the player in the chat column
+      $("recording-card").hidden = false;
+      $("panel-live").hidden = $("panel-upload").hidden = true;
+      document.querySelector("#recording-card .tabs").hidden = true;
+    }
+    play(rec, seconds);
+  }
+
+  /* ================= notes ================= */
+
+  function updateNoteWhen() {
+    $("note-when").textContent = recorder && ["recording", "paused"].includes(recorder.state)
+      ? "Saved at " + timestamp(recorder.elapsed()) + " of the recording" : "";
+  }
+
+  function renderNotes() {
+    const notes = meeting.notes || [];
+    replace($("notes"), notes.length ? notes.map((n) => {
+      const mine = n.author && n.author.id === user.id;
+      return h("li", { class: "note" + (n.kind === "bookmark" ? " note-bookmark" : "") },
+        n.offset_seconds != null
+          ? h("button", { class: "note-time", type: "button", title: "Play from here", onclick: () => seekTo(n.offset_seconds) }, timestamp(n.offset_seconds))
+          : h("span", { class: "note-time is-static" }, new Date(n.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })),
+        h("div", { class: "note-body" },
+          h("div", {}, n.kind === "bookmark" ? "⭐ " : "", n.text),
+          h("div", { class: "small muted" }, n.author ? (n.author.name || n.author.email) : "Someone")),
+        mine || isAdmin ? h("button", { class: "btn btn-ghost btn-icon btn-sm", type: "button", "aria-label": "Delete note",
+          title: "Delete note", onclick: () => deleteNote(n) }, icon("i-close")) : null,
+      );
+    }) : h("li", { class: "muted small" }, "No notes yet. Anyone in the meeting can add notes, during or after it."));
+  }
+
+  async function refreshNotes() {
+    try { meeting.notes = (await api.get(`/meetings/${id}/notes`)).items; renderNotes(); } catch (e) { /* next load */ }
+  }
+
+  $("note-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const text = $("note-text").value.trim();
+    if (!text) return;
+    const body = { text };
+    if (recorder && ["recording", "paused"].includes(recorder.state)) body.offset_seconds = Math.round(recorder.elapsed());
+    try {
+      await api.post(`/meetings/${id}/notes`, body);
+      $("note-text").value = "";
+      refreshNotes();
+    } catch (err) { toast(err.message, "error"); }
+  });
+  $("note-text").addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) $("note-form").requestSubmit();
+  });
+
+  async function deleteNote(n) {
+    try { await api.del(`/notes/${n.id}`); refreshNotes(); } catch (err) { toast(err.message, "error"); }
+  }
+
+  /* ================= documents ================= */
+
+  function renderDocuments() {
+    const docs = meeting.documents || [];
+    replace($("documents"), docs.length ? docs.map((d) => h("div", { class: "list-item list-item-static" },
+      icon("i-file"),
+      h("div", {},
+        h("div", { class: "title" }, d.filename),
+        h("div", { class: "meta" },
+          h("span", {}, M.formatBytes(d.size_bytes)),
+          d.pages ? h("span", {}, plural(d.pages, "page")) : null,
+          d.uploaded_by ? h("span", {}, d.uploaded_by) : null,
+          d.error ? h("span", { class: "text-danger" }, d.error) : null),
+      ),
+      d.status === "queued" ? h("span", { class: "loading-inline" }, h("span", { class: "spinner", "aria-hidden": "true" }), "Reading")
+        : d.status === "ready" ? h("span", { class: "badge badge-completed" }, "Ready") : badge("failed"),
+      h("div", { class: "row-actions" },
+        h("button", { class: "btn btn-ghost btn-sm", type: "button", onclick: () => download(d) }, "Download"),
+        isAdmin ? h("button", { class: "btn btn-ghost btn-sm text-danger", type: "button", onclick: () => deleteDoc(d) }, "Delete") : null),
+    )) : h("p", { class: "muted small" }, "No documents attached."));
+  }
+
+  $("doc-file").addEventListener("change", async (e) => {
+    const file = e.target.files[0];
+    e.target.value = "";
+    if (!file) return;
+    const body = new FormData();
+    body.append("file", file);
+    try {
+      await api.upload(`/meetings/${id}/documents`, body);
+      toast(`“${file.name}” attached. Reading it now…`);
+      load();
+    } catch (err) { toast(err.message, "error"); }
+  });
+
+  async function download(d) {
+    try {
+      const res = await fetch(`/api/documents/${d.id}/download`, { headers: { Authorization: "Bearer " + M.token() } });
+      if (!res.ok) throw new Error("Download failed");
+      const url = URL.createObjectURL(await res.blob());
+      const a = h("a", { href: url, download: d.filename });
+      document.body.append(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+    } catch (err) { toast(err.message, "error"); }
+  }
+
+  async function deleteDoc(d) {
+    if (!confirm(`Delete “${d.filename}”?`)) return;
+    try { await api.del(`/documents/${d.id}`); load(); } catch (err) { toast(err.message, "error"); }
+  }
+
+  /* ================= people ================= */
 
   function renderPeople() {
     if (!meeting.participants.length) {
@@ -347,18 +739,12 @@
         ))));
   }
 
-  /* ---------- transcript ---------- */
+  /* ================= transcript ================= */
 
   function renderTranscriptCard() {
     $("transcript-card").hidden = !meeting.has_transcript;
     if (!meeting.has_transcript) { $("transcript").open = false; transcriptLoaded = false; }
     else if ($("transcript").open && !transcriptLoaded) loadTranscript();
-  }
-
-  function timestamp(seconds) {
-    const s = Math.floor(seconds || 0);
-    const pad = (n) => String(n).padStart(2, "0");
-    return `${pad(Math.floor(s / 3600))}:${pad(Math.floor((s % 3600) / 60))}:${pad(s % 60)}`;
   }
 
   async function loadTranscript() {
@@ -369,7 +755,8 @@
       const { transcript } = await api.get(`/meetings/${id}/transcript`);
       const lines = transcript.segments.length
         ? transcript.segments.map((s) => h("p", { class: "transcript-line" },
-            h("span", { class: "ts" }, timestamp(s.start)), s.speaker ? h("span", { class: "speaker" }, s.speaker) : null, s.text))
+            h("button", { class: "ts", type: "button", title: "Play from here", onclick: () => seekTo(s.start) }, timestamp(s.start)),
+            s.speaker ? h("span", { class: "speaker" }, s.speaker) : null, s.text))
         : [h("p", { class: "transcript-line" }, transcript.text)];
       replace(body, lines);
     } catch (err) {
@@ -379,18 +766,37 @@
   }
   $("transcript").addEventListener("toggle", () => { if ($("transcript").open && !transcriptLoaded) loadTranscript(); });
 
-  /* ---------- Q&A chat ---------- */
+  /* ================= Q&A chat (multi-tool assistant) ================= */
 
   const chatLog = $("chat-log");
   const chatForm = $("chat-form");
   const chatInput = $("chat-input");
+  const chatHistory = [];
   let asking = false;
+  let turn = 0;
+  const TOOL_LABELS = {
+    search_meeting: "this meeting", search_documents: "documents", search_meetings: "other meetings",
+    list_tasks: "tasks", list_meetings: "meeting list", get_meeting_details: "meeting notes", rag: "search",
+  };
 
   function renderChatState() {
-    const ready = meeting.has_transcript || Boolean(meeting.summary);
+    const ready = meeting.has_transcript || Boolean(meeting.summary) || meeting.notes.length > 0
+      || meeting.documents.some((d) => d.status === "ready");
     chatForm.querySelectorAll("input, button").forEach((el) => { el.disabled = !ready; });
     document.querySelectorAll("[data-suggest]").forEach((el) => { el.disabled = !ready; });
     $("chat-hint").hidden = ready;
+  }
+
+  function sourceItem(s, anchor) {
+    let where = s.meeting_title || "";
+    if (s.kind === "document") where = `📄 ${s.document_name}, page ${s.page}`;
+    else if (s.kind === "task") where = "Task · " + (s.meeting_title || "");
+    else if (s.kind === "notes") where = "Notes · " + where;
+    return h("li", { class: "chat-source", id: anchor },
+      h("span", { class: "source-n" }, String(s.n)),
+      h("span", { class: "small" }, where),
+      s.start != null && s.meeting_id === id
+        ? h("button", { class: "btn btn-ghost btn-sm", type: "button", onclick: () => seekTo(s.start) }, "▶ " + timestamp(s.start)) : null);
   }
 
   function addMessage(who, ...content) {
@@ -404,12 +810,21 @@
     const q = question.trim();
     if (!q || asking) return;
     asking = true;
+    turn += 1;
+    const t = turn;
     addMessage("user", q);
     const pending = addMessage("ai", h("span", { class: "typing", "aria-hidden": "true" }, h("span"), h("span"), h("span")),
       h("span", { class: "sr-only" }, "Thinking…"));
     try {
-      const { answer, model } = await api.post(`/meetings/${id}/ask`, { question: q });
-      replace(pending, M.markdownLite(answer), h("div", { class: "msg-meta" }, "Answered by " + shortModel(model)));
+      const res = await api.post(`/meetings/${id}/ask`, { question: q, history: chatHistory.slice(-6) });
+      const sources = res.sources || [];
+      const cite = (n) => (sources.some((s) => s.n === n) ? `#c${t}-${n}` : null);
+      const looked = [...new Set((res.tools || []).map((x) => TOOL_LABELS[x] || x))];
+      replace(pending,
+        M.markdownLite(res.answer, { cite }),
+        sources.length ? h("ol", { class: "chat-sources" }, sources.map((s) => sourceItem(s, `c${t}-${s.n}`))) : null,
+        h("div", { class: "msg-meta" }, (looked.length ? "Looked in: " + looked.join(", ") + " · " : "") + "answered by " + shortModel(res.model)));
+      chatHistory.push({ role: "user", content: q }, { role: "assistant", content: res.answer });
     } catch (err) {
       pending.classList.add("msg-error");
       replace(pending, err.message);
@@ -419,21 +834,20 @@
     }
   }
 
-  chatForm.addEventListener("submit", (e) => {
-    e.preventDefault();
-    ask(chatInput.value);
-    chatInput.value = "";
-  });
+  chatForm.addEventListener("submit", (e) => { e.preventDefault(); ask(chatInput.value); chatInput.value = ""; });
   document.querySelectorAll("[data-suggest]").forEach((chip) => chip.addEventListener("click", () => ask(chip.textContent)));
 
-  /* ---------- delete ---------- */
+  /* ================= rename & delete ================= */
+
+  $("rename").addEventListener("click", async () => {
+    const title = prompt("Meeting title", meeting.title);
+    if (!title || title.trim() === meeting.title) return;
+    try { await api.patch("/meetings/" + id, { title: title.trim() }); load(); } catch (err) { toast(err.message, "error"); }
+  });
 
   $("delete-meeting").addEventListener("click", async () => {
-    if (!confirm(`Delete “${meeting.title}”? Its recording, transcript and tasks are removed too. This can’t be undone.`)) return;
-    try {
-      await api.del("/meetings/" + id);
-      location.assign("admin.html");
-    } catch (err) { toast(err.message, "error"); }
+    if (!confirm(`Delete “${meeting.title}”? Its recordings, transcript, notes, documents and tasks are removed too. This can’t be undone.`)) return;
+    try { await api.del("/meetings/" + id); location.assign("admin.html"); } catch (err) { toast(err.message, "error"); }
   });
 
   load();
