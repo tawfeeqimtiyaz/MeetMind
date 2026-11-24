@@ -33,6 +33,8 @@ services:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
+      chroma:
+        condition: service_started
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8000/api/health"]
       interval: 10s
@@ -47,6 +49,17 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      chroma:
+        condition: service_started
+    restart: unless-stopped
+
+  scheduler:
+    <<: *backend
+    # Queues daily reminder emails and hourly clean-up jobs for the worker
+    command: ["python", "-m", "meetmind.scheduler"]
+    depends_on:
       redis:
         condition: service_healthy
     restart: unless-stopped
@@ -64,6 +77,15 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+    restart: unless-stopped
+
+  chroma:
+    # Vector database for RAG: meeting chunks + embeddings (Phase 6)
+    image: chromadb/chroma:1.5.9
+    environment:
+      ANONYMIZED_TELEMETRY: "FALSE"
+    volumes:
+      - chromadata:/data
     restart: unless-stopped
 
   redis:
@@ -105,6 +127,7 @@ services:
       APP_ENV: test
 
 volumes:
+  chromadata:
   pgdata:
   redisdata:
   uploads:
