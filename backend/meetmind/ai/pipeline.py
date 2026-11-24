@@ -1,7 +1,10 @@
 """The meeting pipeline as a LangGraph state machine.
 
-    START -> transcribe -> analyze -> save_draft --(AI found tasks)--> human_review -> finalize -> END
-                                                \\--(no tasks)---------------------> finalize
+    START -> transcribe -> analyze -> save_draft -> index --(AI found tasks)--> human_review -> finalize -> END
+                                                          \\--(no tasks)---------------------> finalize
+
+`index` adds the meeting to the RAG search index (ChromaDB). If that fails it is retried in the
+background, so search problems never block a meeting.
 
 `human_review` calls `interrupt()`: the graph stops, its state is checkpointed (Postgres),
 and the meeting shows status "review". When an admin approves tasks in the UI, the API
@@ -24,11 +27,12 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.types import Command, interrupt
 from sqlalchemy.orm import sessionmaker
 
-from .. import notifications
+from .. import notifications, task_queue
 from ..config import Settings
 from ..models import Meeting, Recording, Task, Transcript
 from .analysis import (
     LLMAnalysis, MeetingContext, clean_title, evidence_supported, match_owner, parse_due_date, resolve_due_date,
+    task_priority,
 )
 from .checkpoint import open_checkpointer
 from .transcription import TranscriptionResult, format_transcript
@@ -55,6 +59,7 @@ class PipelineDeps:
     settings: Settings
     transcribe: Callable[[Path, str | None], TranscriptionResult]
     analyze: Callable[[MeetingContext, str], tuple[LLMAnalysis, str]]
+    rag: Callable[[], object] | None = None  # returns the RAGService; None disables indexing
 
 
 def meeting_local_date(meeting: Meeting) -> date:
@@ -78,6 +83,34 @@ def _whisper_hint(meeting: Meeting) -> str:
     return f"Meeting: {meeting.title}. Participants: {names}."
 
 
+_NO_NAME = {"", "unknown", "n/a", "na", "none", "null", "someone", "speaker", "audience", "participant", "attendee"}
+
+
+def _clean_follow_up(f: dict) -> dict:
+    """Models sometimes write 'unknown' instead of null for who asked/answered."""
+    for key in ("asked_by", "answered_by"):
+        value = (f.get(key) or "").strip()
+        f[key] = None if value.lower() in _NO_NAME else value
+    f["question"] = f["question"].strip()
+    f["answer"] = (f.get("answer") or "").strip() or None
+    return f
+
+
+def _notes_for_ai(meeting: Meeting) -> list[str]:
+    """Notes typed in MeetMind, with their position in the recording and author, for the AI."""
+    from .transcription import format_timestamp
+
+    out = []
+    for n in meeting.notes:
+        at = f"[{format_timestamp(n.offset_seconds)}] " if n.offset_seconds is not None else ""
+        who = (n.author.name or n.author.email) if n.author else "someone"
+        if n.kind == "bookmark":
+            out.append(f"{at}MOMENT MARKED IMPORTANT by {who}" + (f": {n.text}" if n.text and n.text != "Important moment" else ""))
+        else:
+            out.append(f"{at}{who} noted: {n.text}")
+    return out
+
+
 def build_graph(deps: PipelineDeps, checkpointer):
     sf = deps.session_factory
 
@@ -91,6 +124,12 @@ def build_graph(deps: PipelineDeps, checkpointer):
             meeting.status = "processing"
             db.commit()
             audio_path = Path(deps.settings.upload_dir) / rec.storage_path
+            pieces = Path(deps.settings.upload_dir) / Path(rec.storage_path).parent / f"live-{rec.id}"
+            if pieces.exists():  # recorded in the browser: join the pieces into one file first
+                from ..media import assemble_pieces
+
+                rec.size_bytes = assemble_pieces(pieces, audio_path)
+                db.commit()
             hint, meeting_id = _whisper_hint(meeting), str(meeting.id)
 
         result = deps.transcribe(audio_path, hint)  # slow: keep no DB connection open meanwhile
@@ -115,6 +154,7 @@ def build_graph(deps: PipelineDeps, checkpointer):
                 meeting_date=meeting_local_date(meeting),
                 agenda=meeting.agenda,
                 participants=_participants(meeting),
+                notes=_notes_for_ai(meeting),
             )
             text = format_transcript(meeting.transcript.segments, meeting.transcript.text)
         analysis, model = deps.analyze(ctx, text)
@@ -132,12 +172,14 @@ def build_graph(deps: PipelineDeps, checkpointer):
             meeting.summary = analysis.summary.strip()
             meeting.strategy_shifts = [s.strip() for s in analysis.strategy_shifts if s.strip()]
             meeting.open_questions = [q.strip() for q in analysis.open_questions if q.strip()]
+            meeting.follow_ups = [_clean_follow_up(f.model_dump()) for f in analysis.follow_ups if f.question.strip()]
             meeting.ai_model = state.get("ai_model")
 
             participants = _participants(meeting)
             meeting_date = meeting_local_date(meeting)
             users_by_email = {p.email: p.user for p in meeting.participants}
-            transcript_text = meeting.transcript.text
+            # tasks may come from the audio or from notes typed during the meeting
+            transcript_text = "\n".join([meeting.transcript.text, *(n.text for n in meeting.notes)])
             drafts, seen = [], set()
             for item in analysis.tasks:
                 title = clean_title(item.title, item.due_text)
@@ -156,7 +198,9 @@ def build_graph(deps: PipelineDeps, checkpointer):
                     assignee_email=email,
                     assignee=users_by_email.get(email) if email else None,
                     # computed from the spoken words; the model's own date only as a fallback
-                    due_date=resolve_due_date(item.due_text, meeting_date) or parse_due_date(item.due_date),
+                    due_date=resolve_due_date(item.due_text, meeting_date, deps.settings.asap_working_days)
+                    or parse_due_date(item.due_date),
+                    priority=task_priority(item.priority, item.due_text),
                     source="ai",
                     approved=False,
                     evidence=item.evidence.strip()[:1000],
@@ -176,6 +220,24 @@ def build_graph(deps: PipelineDeps, checkpointer):
                 notifications.notify_review_ready(deps.settings, db, meeting, len(drafts))
             return {"draft_task_ids": [str(t.id) for t in drafts]}
 
+    def index(state: PipelineState) -> PipelineState:
+        if deps.rag is None:
+            return {}
+        meeting_id = state["meeting_id"]
+        try:
+            with sf() as db:
+                deps.rag().index_meeting(db.get(Meeting, uuid.UUID(meeting_id)))
+        except Exception as exc:  # noqa: BLE001 - search is a bonus, never a blocker
+            log.warning("Search indexing failed for meeting %s (%s); retrying in the background", meeting_id, exc)
+            try:
+                from rq import Retry
+
+                task_queue.enqueue(deps.settings, "meetmind.jobs.index_meeting", meeting_id,
+                                   retry=Retry(max=5, interval=[30, 120, 600, 1800, 3600]))
+            except Exception:  # noqa: BLE001
+                log.exception("Could not queue indexing retry for meeting %s", meeting_id)
+        return {}
+
     def human_review(state: PipelineState) -> PipelineState:
         # Pauses here. The value passed to Command(resume=...) becomes `decision`.
         decision = interrupt({"meeting_id": state["meeting_id"], "draft_task_ids": state["draft_task_ids"]})
@@ -191,8 +253,9 @@ def build_graph(deps: PipelineDeps, checkpointer):
                 if task is None or task.meeting_id != meeting.id:
                     continue  # deleted/moved by an admin meanwhile
                 if task_id in approved:
+                    if not task.approved:  # already approved (e.g. by the task assistant): no second email
+                        newly_approved.append(task)
                     task.approved = True
-                    newly_approved.append(task)
                 elif not task.approved:
                     db.delete(task)  # rejected draft
             meeting.status = "completed"
@@ -208,12 +271,14 @@ def build_graph(deps: PipelineDeps, checkpointer):
     graph.add_node("transcribe", transcribe)
     graph.add_node("analyze", analyze)
     graph.add_node("save_draft", save_draft)
+    graph.add_node("index", index)
     graph.add_node("human_review", human_review)
     graph.add_node("finalize", finalize)
     graph.add_edge(START, "transcribe")
     graph.add_edge("transcribe", "analyze")
     graph.add_edge("analyze", "save_draft")
-    graph.add_conditional_edges("save_draft", after_save, ["human_review", "finalize"])
+    graph.add_edge("save_draft", "index")
+    graph.add_conditional_edges("index", after_save, ["human_review", "finalize"])
     graph.add_edge("human_review", "finalize")
     graph.add_edge("finalize", END)
     return graph.compile(checkpointer=checkpointer, name="meetmind-pipeline")
