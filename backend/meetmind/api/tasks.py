@@ -44,10 +44,10 @@ def update_task(task_id: uuid.UUID, data: TaskPatch, user: CurrentUser, db: DbSe
         if not changed <= MEMBER_EDITABLE:
             raise APIError(403, "forbidden", "Members can only change the status of their own tasks")
 
-    for field in ("title", "description", "due_date", "status", "approved"):
+    for field in ("title", "description", "due_date", "status", "approved", "priority"):
         if field in changed:
             value = getattr(data, field)
-            if value is None and field in {"title", "status", "approved"}:
+            if value is None and field in {"title", "status", "approved", "priority"}:
                 raise APIError(422, "validation_error", f"{field} cannot be empty")
             setattr(task, field, value)
     if "assignee_email" in changed:

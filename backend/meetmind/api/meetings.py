@@ -16,7 +16,7 @@ from ..ai import default_deps, qa
 from ..ai.llm import AIUnavailableError
 from ..ai.pipeline import PipelineError, resume_review
 from ..config import ALLOWED_RECORDING_EXTENSIONS, Settings
-from ..deps import AdminUser, CurrentUser, DbSession, SettingsDep
+from ..deps import AdminUser, CurrentUser, DbSession, SettingsDep, get_rag
 from ..errors import APIError
 from ..models import Meeting, MeetingParticipant, Recording, Task, User
 from ..ratelimit import rate_limit
@@ -27,7 +27,7 @@ from .common import get_meeting_for, org_user_by_email, visible_meetings
 router = APIRouter()
 log = logging.getLogger(__name__)
 
-MeetingStatus = Literal["scheduled", "processing", "review", "completed", "failed"]
+MeetingStatus = Literal["scheduled", "recording", "processing", "review", "completed", "failed"]
 
 
 def _set_participants(db: Session, meeting: Meeting, emails: list[str]) -> None:
@@ -106,16 +106,22 @@ def update_meeting(meeting_id: uuid.UUID, data: MeetingPatch, admin: AdminUser, 
 
 
 @router.delete("/{meeting_id}", status_code=204)
-def delete_meeting(meeting_id: uuid.UUID, admin: AdminUser, db: DbSession, settings: SettingsDep):
+def delete_meeting(meeting_id: uuid.UUID, request: Request, admin: AdminUser, db: DbSession, settings: SettingsDep):
     meeting = get_meeting_for(db, admin, meeting_id)
     paths = [r.storage_path for r in meeting.recordings]
     db.delete(meeting)
     db.commit()
+    try:
+        get_rag(request).remove_meeting(str(meeting_id))  # keep the search index in sync
+    except Exception:  # noqa: BLE001
+        log.warning("Could not remove meeting %s from the search index", meeting_id)
     for rel in paths:  # remove files only after the DB delete succeeded
         try:
             (Path(settings.upload_dir) / rel).unlink(missing_ok=True)
         except OSError:
             log.warning("Could not delete recording file %s", rel)
+    # the meeting's folder also holds live-recording pieces and attached documents
+    shutil.rmtree(Path(settings.upload_dir) / str(admin.organization_id) / str(meeting_id), ignore_errors=True)
     return Response(status_code=204)
 
 
@@ -254,6 +260,7 @@ def create_task(meeting_id: uuid.UUID, data: TaskIn, admin: AdminUser, db: DbSes
         due_date=data.due_date,
         source="manual",
         approved=True,
+        priority=data.priority,
     )
     db.add(task)
     db.commit()
@@ -317,15 +324,37 @@ def reprocess_meeting(meeting_id: uuid.UUID, admin: AdminUser, db: DbSession, se
 
 
 @router.post("/{meeting_id}/ask", dependencies=[rate_limit("20/minute", "ask")])
-def ask_meeting(meeting_id: uuid.UUID, data: AskIn, user: CurrentUser, db: DbSession, settings: SettingsDep):
-    """Answer a question about this meeting from its transcript, summary and (visible) tasks."""
+def ask_meeting(
+    meeting_id: uuid.UUID, data: AskIn, request: Request, user: CurrentUser, db: DbSession, settings: SettingsDep,
+):
+    """Answer a question about this meeting. The multi-tool assistant searches the transcript, notes,
+    attached documents, tasks and other meetings; if no AI model can run it, a simpler direct answer is used."""
     meeting = get_meeting_for(db, user, meeting_id)
-    if meeting.transcript is None and not meeting.summary:
-        raise APIError(409, "not_ready", "Ask again once the recording has been processed")
+    has_docs = any(d.status == "ready" for d in meeting.documents)
+    if meeting.transcript is None and not meeting.summary and not meeting.notes and not has_docs:
+        raise APIError(409, "not_ready", "Ask again once the recording has been processed (or add notes/documents)")
 
-    context = qa.build_context(meeting, _tasks_visible_to(user, meeting))
+    from ..ai.agents import run_assistant, scope_for
+
+    try:
+        scope = scope_for(request.app.state.session_factory, db, settings, get_rag(request), user, str(meeting.id))
+        result = run_assistant(scope, data.question, [t.model_dump() for t in data.history])
+        return {"answer": result.answer, "model": result.model, "sources": result.sources, "tools": result.tools_used}
+    except AIUnavailableError:
+        log.warning("Assistant unavailable for meeting %s; using the direct answer", meeting.id)
+
+    tasks = _tasks_visible_to(user, meeting)
+    context = qa.build_context(meeting, tasks)
+    if len(context) > settings.rag_full_context_chars:
+        # Long meeting: send only the transcript parts that match the question (RAG)
+        try:
+            hits = get_rag(request).search(data.question, str(meeting.organization_id), [str(meeting.id)])
+            excerpts = "\n\n".join(h.text for h in hits if h.metadata.get("kind") == "transcript")
+            context = qa.build_context(meeting, tasks, transcript_override=excerpts or "(no matching excerpts)")
+        except Exception:  # noqa: BLE001 - fall back to the full record
+            log.warning("Retrieval failed for meeting %s; using the full transcript", meeting.id, exc_info=True)
     try:
         answer, model = qa.answer_question(settings, context, data.question)
     except AIUnavailableError as exc:
         raise APIError(503, "ai_unavailable", str(exc))
-    return {"answer": answer, "model": model}
+    return {"answer": answer, "model": model, "sources": [], "tools": []}
