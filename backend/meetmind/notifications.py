@@ -80,8 +80,8 @@ def notify_review_ready(settings: Settings, db, meeting, draft_count: int) -> No
         )
 
 
-def notify_tasks_assigned(settings: Settings, meeting, tasks) -> None:
-    """One email per person, listing their newly approved tasks."""
+def notify_tasks_assigned(settings: Settings, meeting, tasks, message: str | None = None, assigned_by=None) -> None:
+    """One email per person, listing their newly approved tasks (with the admin's note, if any)."""
     by_user = defaultdict(list)
     for t in tasks:
         if t.assignee is not None and t.assignee.status == "active":
@@ -92,8 +92,9 @@ def notify_tasks_assigned(settings: Settings, meeting, tasks) -> None:
             settings, user.email, f"{n} new task{'s' if n != 1 else ''} from {meeting.title}", "tasks_assigned",
             name=user.name, meeting_title=meeting.title, meeting_url=_meeting_url(settings, meeting),
             tasks=[{"title": t.title, "due": t.due_date.strftime("%a %d %b %Y") if t.due_date else None,
-                    "evidence": t.evidence} for t in items],
+                    "evidence": t.evidence, "priority": t.priority} for t in items],
             tasks_url=f"{settings.app_base_url}/member.html",
+            message=message, assigned_by=(assigned_by.name or assigned_by.email) if assigned_by else None,
         )
 
 
@@ -103,3 +104,20 @@ def notify_processing_failed(settings: Settings, db, meeting, error: str) -> Non
             settings, admin.email, f"Processing failed: {meeting.title}", "processing_failed",
             name=admin.name, meeting_title=meeting.title, error=error, meeting_url=_meeting_url(settings, meeting),
         )
+
+
+def send_task_reminder(settings: Settings, user, overdue: list[dict], due_soon: list[dict]) -> bool:
+    parts = []
+    if overdue:
+        parts.append(f"{len(overdue)} overdue")
+    if due_soon:
+        parts.append(f"{len(due_soon)} due soon")
+    return _send(settings, user.email, f"Task reminder: {' and '.join(parts)}", "task_reminder",
+                 name=user.name, overdue=overdue, due_soon=due_soon, tasks_url=f"{settings.app_base_url}/member.html")
+
+
+def send_admin_digest(settings: Settings, admin, organization: str, **sections) -> bool:
+    attention = len(sections["review"]) + len(sections["failed"]) + len(sections["overdue"]) + len(sections["urgent"])
+    return _send(settings, admin.email, f"MeetMind: {attention} thing{'s' if attention != 1 else ''} need your attention",
+                 "admin_digest", name=admin.name, organization=organization,
+                 dashboard_url=f"{settings.app_base_url}/admin.html", **sections)
