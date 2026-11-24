@@ -67,6 +67,29 @@ class Settings(BaseSettings):
     ollama_model: str = ""
     ollama_num_ctx: int = 16384
 
+    # ---------- Live recording, documents, reminders ----------
+    max_live_recording_mb: int = 4000   # recordings made in the browser (video can be large)
+    live_chunk_max_mb: int = 25         # one piece of a live recording (sent every few seconds)
+    max_document_mb: int = 25
+    asap_working_days: int = 2          # "as soon as possible" = this many working days, marked urgent
+    reminder_hour: int = 9              # reminder emails go out at this hour...
+    reminder_timezone: str = "UTC"      # ...in this time zone (e.g. Asia/Kolkata)
+
+    # ---------- Agents ----------
+    agent_max_steps: int = 8            # tool calls an assistant may make for one question
+
+    # ---------- RAG (Phase 6) ----------
+    # Vector database. Empty CHROMA_URL disables semantic search (keyword search is used instead).
+    chroma_url: str = "http://chroma:8000"
+    # nvidia | ollama. Vectors from different models can't be mixed, so each model gets its own collection.
+    embedding_provider: str = "nvidia"
+    nvidia_embedding_model: str = "nvidia/nemotron-3.5-embed-1b"
+    ollama_embedding_model: str = "embeddinggemma:latest"
+    rag_chunk_chars: int = 1200      # ~1 minute of speech per chunk
+    rag_top_k: int = 8               # chunks given to the model per answer
+    rag_full_context_chars: int = 40_000  # per-meeting Q&A sends the whole meeting below this size
+    rag_rerank: bool = True          # a fast LLM re-orders search results by relevance (no reranker model needed)
+
     ai_timeout_seconds: int = 180
     transcription_chunk_minutes: int = 10
 
