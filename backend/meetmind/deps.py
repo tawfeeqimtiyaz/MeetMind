@@ -36,6 +36,16 @@ def get_db(request: Request) -> Iterator[Session]:
         session.close()
 
 
+def get_rag(request: Request):
+    """The RAG service (tests put an in-memory one on app.state.rag)."""
+    service = getattr(request.app.state, "rag", None)
+    if service is None:
+        from .ai.rag import get_service
+
+        service = get_service(request.app.state.settings)
+    return service
+
+
 SettingsDep = Annotated[Settings, Depends(get_settings)]
 DbSession = Annotated[Session, Depends(get_db)]
 
