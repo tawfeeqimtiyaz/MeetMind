@@ -8,6 +8,7 @@ from .pipeline import PipelineDeps
 def default_deps(settings: Settings, session_factory: sessionmaker) -> PipelineDeps:
     """The real providers: Groq Whisper for speech, NVIDIA -> Groq -> Ollama for analysis."""
     from .analysis import analyze_meeting
+    from .rag import get_service
     from .transcription import transcribe_with_groq
 
     return PipelineDeps(
@@ -15,4 +16,5 @@ def default_deps(settings: Settings, session_factory: sessionmaker) -> PipelineD
         settings=settings,
         transcribe=lambda path, hint: transcribe_with_groq(settings, path, hint),
         analyze=lambda ctx, text: analyze_meeting(settings, ctx, text),
+        rag=lambda: get_service(settings),
     )

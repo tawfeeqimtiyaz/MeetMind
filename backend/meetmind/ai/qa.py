@@ -29,8 +29,9 @@ def _local_time(meeting: Meeting) -> str:
     return f"{meeting.scheduled_at:%A %Y-%m-%d %H:%M} UTC"
 
 
-def build_context(meeting: Meeting, tasks: list[Task]) -> str:
-    """The meeting record the model may use. `tasks` is already filtered for the asking user."""
+def build_context(meeting: Meeting, tasks: list[Task], transcript_override: str | None = None) -> str:
+    """The meeting record the model may use. `tasks` is already filtered for the asking user.
+    `transcript_override` replaces the full transcript with retrieved excerpts for long meetings (RAG)."""
     parts = [
         f"MEETING: {meeting.title}",
         f"DATE: {_local_time(meeting)}",
@@ -48,7 +49,10 @@ def build_context(meeting: Meeting, tasks: list[Task]) -> str:
             due = t.due_date.isoformat() if t.due_date else "no due date"
             lines.append(f"- {t.title} (owner: {owner}; due: {due}; status: {t.status})")
         parts.append("TASKS:\n" + "\n".join(lines))
-    if meeting.transcript:
+    if transcript_override is not None:
+        parts.append("RELEVANT TRANSCRIPT EXCERPTS (the meeting is long, so only the parts matching the question):\n"
+                     + transcript_override)
+    elif meeting.transcript:
         parts.append("TRANSCRIPT:\n" + format_transcript(meeting.transcript.segments, meeting.transcript.text))
     return "\n\n".join(parts)
 
