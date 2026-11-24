@@ -55,10 +55,18 @@
 
   // Minimal, safe Markdown for AI answers: paragraphs, "- " / "1. " lists, **bold**, `code`.
   // Builds DOM nodes from text (never innerHTML), so model output can't inject markup.
-  function markdownLite(text) {
-    const inline = (line) => line.split(/(\*\*[^*]+\*\*|`[^`]+`)/g).filter(Boolean).map((part) => {
+  // options.cite(n) -> href turns "[1]" source citations into links (used by Ask MeetMind)
+  function markdownLite(text, options) {
+    const cite = options && options.cite;
+    const pattern = cite ? /(\*\*[^*]+\*\*|`[^`]+`|\[\d{1,2}\])/g : /(\*\*[^*]+\*\*|`[^`]+`)/g;
+    const inline = (line) => line.split(pattern).filter(Boolean).map((part) => {
       if (part.startsWith("**") && part.endsWith("**")) return h("strong", {}, part.slice(2, -2));
       if (part.startsWith("`") && part.endsWith("`")) return h("code", {}, part.slice(1, -1));
+      if (cite && /^\[\d{1,2}\]$/.test(part)) {
+        const n = Number(part.slice(1, -1));
+        const href = cite(n);
+        return href ? h("a", { class: "cite", href, title: "Source " + n }, String(n)) : part;
+      }
       return part;
     });
     const out = [];
@@ -86,6 +94,7 @@
     processing: ["Processing", "badge-processing"],
     queued: ["Queued", "badge-processing"],
     review: ["Review", "badge-review"],
+    recording: ["Recording", "badge-recording"],
     completed: ["Completed", "badge-completed"],
     failed: ["Failed", "badge-failed"],
     done: ["Done", "badge-done"],
@@ -171,6 +180,12 @@
   function showPageError(container, err) {
     replace(container, h("div", { class: "alert alert-error", role: "alert" }, err.message || "Something went wrong."));
   }
+
+  // Every form on the signed-in pages is handled by JavaScript. Never let one submit natively,
+  // e.g. when Enter is pressed before the page script has finished loading (that would reload the page).
+  document.addEventListener("submit", (e) => {
+    if (e.target.closest(".app")) e.preventDefault();
+  });
 
   Object.assign(M, {
     h, append, replace, icon, empty, loading, badge, markdownLite,
