@@ -26,6 +26,9 @@
       <a class="nav-item" href="#team">
         <svg class="icon"><use href="assets/icons.svg#i-users"/></svg>Team
       </a>
+      <a class="nav-item" href="ask.html">
+        <svg class="icon"><use href="assets/icons.svg#i-sparkles"/></svg>Ask MeetMind
+      </a>
     </nav>
     <div class="sidebar-footer">
       <div class="user-chip">
@@ -55,9 +58,14 @@
             <h1 id="greeting">Dashboard</h1>
             <p>Manage meetings and turn decisions into action.</p>
           </div>
-          <a class="btn btn-primary" href="create-meeting.html">
-            <svg class="icon"><use href="assets/icons.svg#i-plus"/></svg>New meeting
-          </a>
+          <div class="row">
+            <button class="btn btn-secondary" type="button" id="instant-meeting" title="Create a meeting that starts now and record it">
+              <span class="rec-dot" aria-hidden="true"></span>Record a meeting now
+            </button>
+            <a class="btn btn-primary" href="create-meeting.html">
+              <svg class="icon"><use href="assets/icons.svg#i-plus"/></svg>New meeting
+            </a>
+          </div>
         </div>
 
         <section class="stats" aria-label="Overview">

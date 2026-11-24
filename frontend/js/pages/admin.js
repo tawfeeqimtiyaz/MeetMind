@@ -4,6 +4,23 @@
   const M = window.MeetMind;
   const { h, replace, icon, badge, empty, loading, formatDateTime, plural, api, toast } = M;
 
+  // Instant meeting: create a meeting that starts now and open it ready to record
+  document.getElementById("instant-meeting").addEventListener("click", async (e) => {
+    const title = prompt("Meeting title", "Meeting " + new Date().toLocaleString([], { dateStyle: "medium", timeStyle: "short" }));
+    if (title === null) return;
+    e.currentTarget.disabled = true;
+    try {
+      const { meeting } = await api.post("/meetings/instant", {
+        title: title.trim() || null,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || null,
+      });
+      location.assign("meeting.html?id=" + encodeURIComponent(meeting.id) + "&record=1");
+    } catch (err) {
+      e.currentTarget.disabled = false;
+      toast(err.message, "error");
+    }
+  });
+
   const user = await M.requireUser({ admin: true });
   document.getElementById("greeting").textContent = "Welcome, " + (user.name || user.email).split(" ")[0];
 
