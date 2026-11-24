@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ask MeetMind · MeetMind</title>
+  <link rel="icon" href="assets/logo.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+
+<div class="app">
+  <aside class="sidebar" id="sidebar" aria-label="Sidebar">
+    <a class="brand" href="admin.html" data-home-link><img src="assets/logo.svg" alt="">MeetMind</a>
+    <nav class="nav" aria-label="Main">
+      <a class="nav-item" href="admin.html" data-admin-only hidden>
+        <svg class="icon"><use href="assets/icons.svg#i-dashboard"/></svg>Dashboard
+      </a>
+      <a class="nav-item" href="create-meeting.html" data-admin-only hidden>
+        <svg class="icon"><use href="assets/icons.svg#i-plus"/></svg>New meeting
+      </a>
+      <a class="nav-item" href="admin.html#meetings" data-admin-only hidden>
+        <svg class="icon"><use href="assets/icons.svg#i-calendar"/></svg>Meetings
+      </a>
+      <a class="nav-item" href="admin.html#team" data-admin-only hidden>
+        <svg class="icon"><use href="assets/icons.svg#i-users"/></svg>Team
+      </a>
+      <a class="nav-item" href="member.html" data-member-only hidden>
+        <svg class="icon"><use href="assets/icons.svg#i-dashboard"/></svg>My work
+      </a>
+      <a class="nav-item" href="member.html#tasks" data-member-only hidden>
+        <svg class="icon"><use href="assets/icons.svg#i-tasks"/></svg>My tasks
+      </a>
+      <a class="nav-item" href="member.html#meetings" data-member-only hidden>
+        <svg class="icon"><use href="assets/icons.svg#i-calendar"/></svg>My meetings
+      </a>
+      <a class="nav-item" href="ask.html" aria-current="page">
+        <svg class="icon"><use href="assets/icons.svg#i-sparkles"/></svg>Ask MeetMind
+      </a>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="user-chip">
+        <span class="avatar" aria-hidden="true"></span>
+        <div class="who"><div class="name"></div><div class="role"></div></div>
+        <a class="btn btn-ghost btn-icon" href="login.html?signout=1" aria-label="Sign out" title="Sign out">
+          <svg class="icon"><use href="assets/icons.svg#i-logout"/></svg>
+        </a>
+      </div>
+    </div>
+  </aside>
+
+  <div>
+    <header class="topbar">
+      <button class="btn btn-ghost btn-icon" type="button" data-nav-toggle aria-controls="sidebar"
+              aria-expanded="false" aria-label="Open menu">
+        <svg class="icon icon-lg"><use href="assets/icons.svg#i-menu"/></svg>
+      </button>
+      <a class="brand" href="admin.html" data-home-link><img src="assets/logo.svg" alt="">MeetMind</a>
+      <span class="avatar" aria-hidden="true"></span>
+    </header>
+
+    <main class="main" id="main">
+      <div class="main-inner ask-page">
+        <div class="page-header">
+          <div>
+            <h1>Ask MeetMind</h1>
+            <p>Ask about any of your meetings. Answers cite the meetings and the moments they come from.</p>
+          </div>
+        </div>
+
+        <section class="card ask-card" aria-label="Conversation">
+          <div class="ask-log" id="ask-log" aria-live="polite">
+            <div class="ask-empty" id="ask-empty">
+              <svg class="icon"><use href="assets/icons.svg#i-sparkles"/></svg>
+              <p class="empty-title">What would you like to know?</p>
+              <p class="muted small">MeetMind searches every meeting you’re part of, then answers with sources.</p>
+              <div class="chat-suggestions">
+                <button class="chip" type="button" data-suggest>What decisions did we make recently?</button>
+                <button class="chip" type="button" data-suggest>Which open questions are still unresolved?</button>
+                <button class="chip" type="button" data-suggest>What did we say about the launch date?</button>
+              </div>
+            </div>
+          </div>
+          <form class="chat-form ask-form" id="ask-form">
+            <label class="sr-only" for="ask-input">Your question</label>
+            <input class="input" id="ask-input" autocomplete="off" maxlength="1000"
+                   placeholder="e.g. What did we decide about pricing last month?">
+            <button class="btn btn-primary" type="submit">
+              <svg class="icon"><use href="assets/icons.svg#i-send"/></svg>Ask
+            </button>
+          </form>
+        </section>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script src="js/ui.js"></script>
+<script src="js/api.js"></script>
+<script src="js/app.js"></script>
+<script src="js/pages/ask.js"></script>
+</body>
+</html>
