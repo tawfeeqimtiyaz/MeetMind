@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block preheader %}What needs your attention in {{ organization }} today.{% endblock %}
+{% block content %}
+<h1 style="margin:0 0 12px;font-size:22px;line-height:30px;">What's important today</h1>
+<p style="margin:0 0 16px;font-size:15px;line-height:24px;color:#334155;">Hi{% if name %} {{ name }}{% endif %}, here's what needs your attention in <strong>{{ organization }}</strong>.</p>
+
+{% macro section(title, color, items) %}
+{% if items %}
+<div style="font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:{{ color }};margin:18px 0 8px;">{{ title }} ({{ items|length }})</div>
+{% for i in items %}
+<div style="margin:0 0 6px;padding:10px 14px;border:1px solid #e2e8f0;border-radius:10px;font-size:14px;line-height:20px;">
+  <a href="{{ i.url }}" style="color:#0f172a;font-weight:600;text-decoration:none;">{{ i.title }}</a>
+  {% if i.detail %}<div style="font-size:13px;color:#5b6b82;">{{ i.detail }}</div>{% endif %}
+</div>
+{% endfor %}
+{% endif %}
+{% endmacro %}
+
+{{ section("Waiting for your review", "#7c3aed", review) }}
+{{ section("Processing failed", "#b91c1c", failed) }}
+{{ section("Overdue tasks", "#b91c1c", overdue) }}
+{{ section("Urgent open tasks", "#c2410c", urgent) }}
+{{ section("Starred recordings", "#2563eb", important) }}
+
+<div style="margin:18px 0 0;padding:12px 14px;background:#f1f5f9;border-radius:10px;font-size:13px;line-height:20px;color:#334155;">
+  Recordings stored: <strong>{{ recordings_count }}</strong> ({{ storage }}). Star the important ones on each meeting page so they stand out here.
+</div>
+{% with url=dashboard_url, label="Open dashboard" %}{% include "_button.html" %}{% endwith %}
+{% endblock %}
+{% block footer %}You get this summary because you're an admin. It's only sent when something needs attention.{% endblock %}

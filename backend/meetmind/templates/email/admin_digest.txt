@@ -1,0 +1,18 @@
+Hi{% if name %} {{ name }}{% endif %},
+
+Here's what needs your attention in {{ organization }}.
+{% for title, items in [("WAITING FOR YOUR REVIEW", review), ("PROCESSING FAILED", failed), ("OVERDUE TASKS", overdue), ("URGENT OPEN TASKS", urgent), ("STARRED RECORDINGS", important)] %}
+{% if items %}
+
+{{ title }} ({{ items|length }})
+{% for i in items %}
+- {{ i.title }}{% if i.detail %} - {{ i.detail }}{% endif %}
+{% endfor %}
+{% endif %}
+{% endfor %}
+
+Recordings stored: {{ recordings_count }} ({{ storage }})
+
+Open dashboard: {{ dashboard_url }}
+
+- MeetMind
