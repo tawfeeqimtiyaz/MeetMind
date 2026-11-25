@@ -3,10 +3,12 @@
    never depends on one giant upload, and a dropped network or closed tab loses (almost) nothing.
 
    Modes
-     room   : the laptop/USB microphone. Noise suppression is OFF by default so quieter voices and
-              questions from the audience are kept; automatic gain lifts distant speakers.
-     online : the meeting app's sound (shared tab/screen audio) + your microphone, mixed together.
-     screen : like online, plus the screen as video.
+     room         : the laptop/USB microphone. Noise suppression is OFF by default so quieter voices and
+                    questions from the audience are kept; automatic gain lifts distant speakers.
+     presentation : in the room + the screen shown on the big screen/projector, recorded as video at a low
+                    frame rate (plenty for slides). The worker takes a still of every slide and AI reads it.
+     online       : the meeting app's sound (shared tab/screen audio) + your microphone, mixed together.
+     screen       : like online, plus the screen as video.
 */
 (function () {
   "use strict";
@@ -98,27 +100,33 @@
     }
 
     async start({ mode, deviceId, noiseReduction }) {
+      const inRoom = mode === "room" || mode === "presentation";
       const micConstraints = {
         deviceId: deviceId ? { exact: deviceId } : undefined,
         channelCount: 1,
         sampleRate: 48000,
         autoGainControl: true,
         // in the room: keep every voice (suppression can cut quiet or distant speakers)
-        noiseSuppression: mode === "room" ? !!noiseReduction : true,
+        noiseSuppression: inRoom ? !!noiseReduction : true,
         // online: avoid recording the meeting audio twice through the speakers
-        echoCancellation: mode !== "room",
+        echoCancellation: !inRoom,
       };
 
       let display = null;
       if (mode !== "room") {
         display = await navigator.mediaDevices.getDisplayMedia({
-          video: true,
+          // slides change rarely: 5 frames per second keeps a one-hour presentation small
+          video: mode === "presentation" ? { frameRate: { ideal: 5, max: 10 } } : true,
           audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
           systemAudio: "include",
           selfBrowserSurface: "exclude",
         });
         this.streams.push(display);
-        if (!display.getAudioTracks().length) {
+        if (mode === "presentation" && !display.getVideoTracks().length) {
+          this.cleanup();
+          throw new Error("No screen was shared. Share the screen or window shown on the big screen.");
+        }
+        if (mode !== "presentation" && !display.getAudioTracks().length) {
           this.cleanup();
           throw new Error("No meeting sound was shared. Share again and tick “Share tab audio” (or “Share system audio”).");
         }
@@ -142,7 +150,7 @@
         }
       }
       const tracks = [...dest.stream.getAudioTracks()];
-      const withVideo = mode === "screen";
+      const withVideo = mode === "screen" || mode === "presentation";
       if (withVideo) tracks.unshift(display.getVideoTracks()[0]);
       else if (display) display.getVideoTracks().forEach((t) => t.stop()); // audio only: drop the video
       const stream = new MediaStream(tracks);
@@ -157,7 +165,7 @@
       this.recorder = new MediaRecorder(stream, {
         mimeType: mimeType || undefined,
         audioBitsPerSecond: 128000,
-        videoBitsPerSecond: withVideo ? 2500000 : undefined,
+        videoBitsPerSecond: mode === "presentation" ? 600000 : withVideo ? 2500000 : undefined,
       });
       this.recorder.addEventListener("dataavailable", (e) => {
         if (e.data && e.data.size) this.enqueue(e.data);
