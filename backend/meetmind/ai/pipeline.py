@@ -14,6 +14,7 @@ Nodes get the database/AI helpers through `PipelineDeps`, so tests can pass fake
 Graph state holds only small IDs and the analysis; the transcript itself lives in the DB.
 """
 import logging
+import re
 import uuid
 from collections.abc import Callable
 from datetime import date, timezone
@@ -105,10 +106,29 @@ def _notes_for_ai(meeting: Meeting) -> list[str]:
         at = f"[{format_timestamp(n.offset_seconds)}] " if n.offset_seconds is not None else ""
         who = (n.author.name or n.author.email) if n.author else "someone"
         if n.kind == "bookmark":
-            out.append(f"{at}MOMENT MARKED IMPORTANT by {who}" + (f": {n.text}" if n.text and n.text != "Important moment" else ""))
+            out.append(f"{at}STARRED by {who} (pay attention to what was said here)"
+                       + (f": {n.text}" if n.text and n.text != "Important moment" else ""))
         else:
             out.append(f"{at}{who} noted: {n.text}")
     return out
+
+
+# "…release plan, a moment marked important, originally…" -> "…release plan, originally…"
+_STAR_TALK = re.compile(
+    r"(,\s*|\s+)?\b(?:an?|the|one|two|several|some)?\s*(?:important\s+)?moments?\s+(?:was\s+|were\s+)?"
+    r"(?:marked|starred|flagged|bookmarked)(?:\s+as)?(?:\s+important)?\b(?:\s*\([^)]*\))?(?=[\s,.;:]|$)",
+    re.I,
+)
+
+
+def clean_summary(text: str) -> str:
+    """Remove talk about the ⭐ markers themselves; they steer the AI but are not meeting content."""
+    out = _STAR_TALK.sub("", text or "")
+    out = re.sub(r"\s+([,.;:])", r"\1", out)         # no space before punctuation
+    out = re.sub(r",\s*,", ",", out)                  # no double commas
+    out = re.sub(r"(^|[.!?]\s+),\s*", r"\1", out)     # no comma starting a sentence
+    out = re.sub(r"(^|[.!?])\s*\.", r"\1", out)       # a sentence that was only star talk
+    return re.sub(r"\s{2,}", " ", out).strip()
 
 
 def build_graph(deps: PipelineDeps, checkpointer):
@@ -175,7 +195,7 @@ def build_graph(deps: PipelineDeps, checkpointer):
                 meeting.tasks.remove(old)  # delete-orphan cascade deletes the row
             db.flush()
 
-            meeting.summary = analysis.summary.strip()
+            meeting.summary = clean_summary(analysis.summary)
             meeting.strategy_shifts = [s.strip() for s in analysis.strategy_shifts if s.strip()]
             meeting.open_questions = [q.strip() for q in analysis.open_questions if q.strip()]
             meeting.follow_ups = [_clean_follow_up(f.model_dump()) for f in analysis.follow_ups if f.question.strip()]

@@ -63,7 +63,10 @@ Rules:
 - If a later answer or discussion changes an earlier statement, the FINAL outcome wins: report the decision,
   task, owner or date as it stood at the end of the discussion.
 - MEETING NOTES were typed by participants during the meeting. Treat them as reliable context (they may add
-  names, decisions or tasks the audio missed). Moments marked important deserve attention in the summary.
+  names, decisions or tasks the audio missed).
+- Lines starting with a star (STARRED) are moments a participant starred as important: give what was SAID
+  around that time extra weight in the summary, decisions and tasks. Never mention the starring itself
+  (do not write things like "a moment was marked important").
 - summary: 3-6 sentences covering what was discussed, what was decided and the main next steps.
   Do not just restate the meeting title, date, agenda or participant list.
 - task title: a short imperative action ("Book the stakeholder demo"). Leave the owner and the deadline
