@@ -28,6 +28,7 @@ def recording_out(r: Recording) -> dict:
         "duration_seconds": r.duration_seconds,
         "important": r.important,
         "chunks_received": r.chunks_received,
+        "stage": r.stage,
         "content_type": r.content_type,
         "created_at": _iso(r.created_at),
     }

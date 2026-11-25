@@ -127,6 +127,8 @@ class Recording(TimestampMixin, Base):
     duration_seconds: Mapped[float | None] = mapped_column()
     important: Mapped[bool] = mapped_column(default=False)  # starred by an admin: keep and highlight
     chunks_received: Mapped[int] = mapped_column(default=0)  # live recordings arrive in numbered pieces
+    # while processing: preparing (joining live pieces) | transcribing | analysing; None otherwise
+    stage: Mapped[str | None] = mapped_column(String(20))
 
     meeting: Mapped[Meeting] = relationship(back_populates="recordings")
 
