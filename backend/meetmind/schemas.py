@@ -121,7 +121,7 @@ class InstantMeetingIn(_In):
 
 
 class LiveRecordingIn(_In):
-    mode: Literal["room", "online", "screen"]
+    mode: Literal["room", "presentation", "online", "screen"]
     mime_type: str = Field(default="audio/webm", max_length=100)
 
 

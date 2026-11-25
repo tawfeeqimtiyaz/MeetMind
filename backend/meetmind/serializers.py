@@ -1,5 +1,5 @@
 """Model -> JSON. Kept in one place so the API shape is consistent."""
-from .models import Document, Meeting, MeetingNote, Recording, Task, User
+from .models import Document, Meeting, MeetingNote, Recording, Slide, Task, User
 
 
 def _iso(dt):
@@ -59,6 +59,24 @@ def document_out(d: Document) -> dict:
     }
 
 
+def slide_out(s: Slide, image_token: str | None = None) -> dict:
+    """`image_token`: a short-lived link token (an <img> tag can't send the login header)."""
+    return {
+        "id": str(s.id),
+        "source": s.source,
+        "offset_seconds": s.offset_seconds,
+        "status": s.status,
+        "error": s.error,
+        "title": s.title,
+        "text": s.text,
+        "ai_model": s.ai_model,
+        "added_by": (s.added_by.name or s.added_by.email) if s.added_by else None,
+        "added_by_id": str(s.added_by_id) if s.added_by_id else None,
+        "image_url": f"/api/slides/{s.id}/image?token={image_token}" if image_token else None,
+        "created_at": _iso(s.created_at),
+    }
+
+
 def task_out(t: Task) -> dict:
     return {
         "id": str(t.id),
@@ -94,8 +112,8 @@ def meeting_summary_out(m: Meeting) -> dict:
     }
 
 
-def meeting_out(m: Meeting, tasks: list[Task]) -> dict:
-    """Full form for the meeting page. `tasks` is pre-filtered for the viewer."""
+def meeting_out(m: Meeting, tasks: list[Task], slide_token: str | None = None) -> dict:
+    """Full form for the meeting page. `tasks` is pre-filtered for the viewer; `slide_token` signs slide images."""
     return {
         **meeting_summary_out(m),
         "agenda": m.agenda,
@@ -105,6 +123,8 @@ def meeting_out(m: Meeting, tasks: list[Task]) -> dict:
         "follow_ups": m.follow_ups or [],
         "notes": [note_out(n) for n in m.notes],
         "documents": [document_out(d) for d in m.documents],
+        "slides": [slide_out(s, slide_token) for s in sorted(
+            m.slides, key=lambda s: (s.offset_seconds is None, s.offset_seconds or 0, s.created_at))],
         "ai_model": m.ai_model,
         "participants": [
             {"email": p.email, "name": p.user.name if p.user else None, "is_user": p.user_id is not None}
