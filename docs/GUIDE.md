@@ -37,6 +37,7 @@ It was rebuilt step by step into a production-style application:
 | **6. Real pages** | Every page connected to the server: dashboards, team management, meeting page, chat. |
 | **7. RAG search** | Ask questions across **all** meetings; answers cite their sources. |
 | **8. Live meetings & agents** | Record in the browser, live notes, follow-up questions, documents and bug reports, an AI **task assistant**, a **multi-tool AI agent**, reminders. |
+| **9. Interface** | A full-screen recorder with shortcuts, tabs on the meeting page, live progress steps, a tasks board, a dashboard that shows what needs attention, dark mode. |
 
 ---
 
@@ -134,16 +135,18 @@ transcripts, notes and documents are **data, not instructions**, and important a
 
 1. Start **Docker Desktop**, then in the project folder: `docker compose up -d` (wait until `docker compose ps` shows all *Up*).
 2. Open <http://localhost:8080>, sign in (or **Get started** to create a workspace).
-3. Dashboard → **Record a meeting now** → *In the room* → **Start recording**. Talk for a minute, e.g.
-   *"Maya, please fix the login bug as soon as possible. Alex, update the docs by Friday."* Ask yourself a question
-   and answer it. Type a note and press ⭐.
-4. **Stop & process**. Watch the page: about a minute later you see the summary, Q&A and draft tasks.
-5. In **Task assistant** type *"Give the bug to Maya and the docs to Alex, everything urgent"* → **Prepare plan** → **Confirm**.
+3. Dashboard → **Record a meeting now** → *In the room* → **Start recording**. The full-screen recorder opens. Talk
+   for a minute, e.g. *"Maya, please fix the login bug as soon as possible. Alex, update the docs by Friday."* Ask
+   yourself a question and answer it. Press **N** and type a note, press **M** to mark a moment, **Space** to pause.
+4. **Stop & process**. Watch the progress steps (Preparing audio → Transcribing → Analysing): about a minute later
+   you see the summary, Q&A and draft tasks.
+5. **Tasks** tab → **Task assistant** → *"Give the bug to Maya and the docs to Alex, everything urgent"* → **Prepare plan** → **Confirm**.
 6. Open <http://localhost:8025> to see the emails.
-7. **Documents** → *Attach* a text or PDF file → ask in the chat *"What does the document say about …?"*
-8. Click a time in the transcript, and the recording plays from there.
-9. Sign in as a member to see their view (only their meetings and tasks).
-10. Run the automated tests: `docker compose --profile test run --rm tests` (98 should pass).
+7. **Documents** tab → *Attach* a text or PDF file → ask in the chat *"What does the document say about …?"*
+8. **Transcript** tab → click a time: the player at the bottom plays from there.
+9. **Tasks board** in the sidebar → drag a card to *In progress*. Back on the dashboard, see *Needs attention* and the charts.
+10. Sign in as a member to see their view (only their meetings and tasks). Try the theme switch at the bottom of the sidebar.
+11. Run the automated tests: `docker compose --profile test run --rm tests` (102 should pass).
 
 ---
 
