@@ -107,6 +107,7 @@
                 <button class="mtab" role="tab" type="button" id="mtab-overview" data-tab="overview" aria-controls="mpanel-overview">Overview</button>
                 <button class="mtab" role="tab" type="button" id="mtab-tasks" data-tab="tasks" aria-controls="mpanel-tasks">Tasks <span class="count" id="count-tasks" hidden></span></button>
                 <button class="mtab" role="tab" type="button" id="mtab-notes" data-tab="notes" aria-controls="mpanel-notes">Notes <span class="count" id="count-notes" hidden></span></button>
+                <button class="mtab" role="tab" type="button" id="mtab-slides" data-tab="slides" aria-controls="mpanel-slides">Slides <span class="count" id="count-slides" hidden></span></button>
                 <button class="mtab" role="tab" type="button" id="mtab-transcript" data-tab="transcript" aria-controls="mpanel-transcript">Transcript</button>
                 <button class="mtab" role="tab" type="button" id="mtab-documents" data-tab="documents" aria-controls="mpanel-documents">Documents <span class="count" id="count-documents" hidden></span></button>
                 <button class="mtab" role="tab" type="button" id="mtab-recording" data-tab="recording" aria-controls="mpanel-recording" hidden>Recording <span class="rec-dot" id="tab-rec-dot" aria-hidden="true" hidden></span></button>
@@ -253,6 +254,27 @@
                 </section>
               </div>
 
+              <!-- ============ Slides ============ -->
+              <div class="mpanel" id="mpanel-slides" role="tabpanel" aria-labelledby="mtab-slides" tabindex="-1" hidden>
+                <section class="card" aria-labelledby="slides-title">
+                  <div class="card-header">
+                    <div>
+                      <h2 class="card-title" id="slides-title">
+                        <svg class="icon"><use href="assets/icons.svg#i-eye"/></svg>Slides
+                      </h2>
+                      <p class="card-subtitle">What was on the big screen. AI reads each slide, so its numbers reach the summary and search.</p>
+                    </div>
+                    <label class="btn btn-secondary btn-sm doc-upload">
+                      📷 Add a photo of the screen
+                      <input type="file" id="slide-file" class="sr-only" accept="image/jpeg,image/png,image/webp" capture="environment">
+                    </label>
+                  </div>
+                  <div class="slides-grid" id="slides"></div>
+                  <p class="small muted slides-hint">Tip: record with <strong>In the room + presentation</strong> to capture every slide automatically,
+                    or attach the deck (PDF or PowerPoint) under <strong>Documents</strong>.</p>
+                </section>
+              </div>
+
               <!-- ============ Transcript ============ -->
               <div class="mpanel" id="mpanel-transcript" role="tabpanel" aria-labelledby="mtab-transcript" tabindex="-1" hidden>
                 <section class="card" aria-labelledby="transcript-heading">
@@ -283,7 +305,7 @@
                     <label class="btn btn-secondary btn-sm doc-upload">
                       <svg class="icon"><use href="assets/icons.svg#i-upload"/></svg>Attach
                       <input type="file" id="doc-file" class="sr-only"
-                             accept=".pdf,.docx,.md,.markdown,.txt,.csv,.json,.log,.yaml,.yml,.xml,.html,.htm">
+                             accept=".pdf,.docx,.pptx,.md,.markdown,.txt,.csv,.json,.log,.yaml,.yml,.xml,.html,.htm">
                     </label>
                   </div>
                   <div class="list" id="documents"></div>
@@ -318,6 +340,10 @@
                         <label class="mode">
                           <input type="radio" name="mode" value="room" checked>
                           <span class="mode-body"><strong>In the room</strong><span>Conference room or meeting hall: records the microphone.</span></span>
+                        </label>
+                        <label class="mode">
+                          <input type="radio" name="mode" value="presentation">
+                          <span class="mode-body"><strong>In the room + presentation</strong><span>Also records what's on the big screen. AI reads every slide: numbers, charts, codes.</span></span>
                         </label>
                         <label class="mode">
                           <input type="radio" name="mode" value="online">
@@ -447,6 +473,7 @@
   <div class="focus-actions">
     <button class="btn btn-secondary btn-lg" type="button" id="rec-pause">Pause</button>
     <button class="btn btn-secondary btn-lg" type="button" id="rec-mark">⭐ Mark this moment</button>
+    <button class="btn btn-secondary btn-lg" type="button" id="rec-snap" title="Take a photo of the big screen (S)">📷 Snap screen</button>
     <button class="btn btn-danger btn-lg" type="button" id="rec-stop">Stop &amp; process</button>
   </div>
   <div class="focus-notes">
@@ -461,10 +488,28 @@
       <span><kbd>Space</kbd> pause / resume</span>
       <span><kbd>M</kbd> mark moment</span>
       <span><kbd>N</kbd> write a note</span>
+      <span><kbd>S</kbd> snap the screen</span>
       <span><kbd>Esc</kbd> minimise</span>
     </div>
   </div>
 </div>
+
+<!-- camera: photo of the big screen -->
+<dialog class="dialog camera-dialog" id="camera-dialog" aria-labelledby="camera-title">
+  <div class="camera-body">
+    <h2 id="camera-title">Snap the big screen</h2>
+    <video id="camera-video" autoplay playsinline muted></video>
+    <p class="small muted" id="camera-hint">Point the camera at the screen so the whole slide is visible.</p>
+    <div class="dialog-actions">
+      <label class="btn btn-ghost doc-upload">Choose a photo
+        <input type="file" id="camera-file" class="sr-only" accept="image/jpeg,image/png,image/webp" capture="environment">
+      </label>
+      <span class="spacer"></span>
+      <button class="btn btn-ghost" type="button" id="camera-cancel">Cancel</button>
+      <button class="btn btn-primary" type="button" id="camera-capture">📷 Take photo</button>
+    </div>
+  </div>
+</dialog>
 
 <script src="js/ui.js"></script>
 <script src="js/api.js"></script>

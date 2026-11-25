@@ -568,7 +568,7 @@ a.cite:hover { background: var(--primary); color: var(--on-primary); }
 .tab[aria-selected="true"] { color: var(--text); border-bottom-color: var(--primary); }
 .tab:disabled { opacity: .5; cursor: not-allowed; }
 .rec-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--danger); flex-shrink: 0; }
-.mode-picker { border: 0; padding: 0; margin: 0 0 14px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.mode-picker { border: 0; padding: 0; margin: 0 0 14px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .mode-picker legend { margin-bottom: 8px; }
 .mode { position: relative; display: block; cursor: pointer; }
 .mode input { position: absolute; opacity: 0; }
@@ -669,6 +669,7 @@ audio.media { background: none; }
 .toast-close:hover { opacity: 1; background: rgba(255, 255, 255, .15); }
 
 .dialog {
+  margin: auto; /* the global "* { margin: 0 }" reset would otherwise pin dialogs to the top-left corner */
   width: min(440px, calc(100vw - 32px)); padding: 0; border: 1px solid var(--border); border-radius: var(--radius-lg);
   background: var(--surface); color: var(--text); box-shadow: var(--shadow-lg);
 }
@@ -769,6 +770,28 @@ body.has-mini-player .main { padding-bottom: 110px; }
 .transcript-full .transcript-line { scroll-margin-top: 70px; }
 #transcript-filter { max-width: 240px; }
 .notes .empty-state { padding: 20px 8px; }
+
+/* Slides */
+.slides-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; }
+.slides-grid > .empty-state { grid-column: 1 / -1; }
+.slide-card { position: relative; display: grid; grid-template-rows: auto 1fr; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; background: var(--surface); scroll-margin-top: 80px; transition: box-shadow .2s; }
+.slide-card.is-failed { border-color: var(--danger); }
+.slide-card.is-highlight { box-shadow: 0 0 0 3px var(--primary); }
+.slide-thumb { display: block; aspect-ratio: 16 / 9; background: var(--surface-2); }
+.slide-thumb img { width: 100%; height: 100%; object-fit: contain; background: #000; }
+.slide-body { display: grid; gap: 6px; align-content: start; padding: 10px 12px 12px; }
+.slide-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.slide-delete { position: absolute; top: 6px; right: 6px; background: rgba(15, 23, 42, .72); color: #fff; }
+.slide-delete:hover { background: var(--danger); color: #fff; }
+.slide-title { font-weight: 600; overflow-wrap: anywhere; }
+.slide-text summary { cursor: pointer; font-size: .82rem; color: var(--text-muted); overflow-wrap: anywhere; }
+.slide-text > div { margin-top: 6px; display: grid; gap: 2px; overflow-wrap: anywhere; }
+.slides-hint { margin-top: 14px; }
+.transcript-slide button { border: 0; background: var(--primary-soft); color: var(--primary); border-radius: 6px; padding: 3px 10px; font: inherit; font-size: .8rem; font-weight: 600; cursor: pointer; }
+.camera-dialog { width: min(720px, calc(100vw - 24px)); }
+.camera-body { display: grid; gap: 12px; padding: 20px; }
+.camera-body video { width: 100%; max-height: 60vh; border-radius: var(--radius-sm); background: #000; }
+.camera-body .dialog-actions { align-items: center; }
 
 /* ---------- 11. Focus recording screen ---------- */
 .focus {
