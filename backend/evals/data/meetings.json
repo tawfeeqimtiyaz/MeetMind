@@ -1,0 +1,128 @@
+[
+  {
+    "id": "launch-sync",
+    "about": "Basic tasks with weekday and 'next week' deadlines, a decision, a parked idea and an open question",
+    "title": "Product launch sync",
+    "date": "2026-12-01T10:00:00",
+    "timezone": "UTC",
+    "participants": [["Maya", "maya@acme.test"], ["Jordan", "jordan@acme.test"], ["Alex", "alex@acme.test"]],
+    "transcript": [
+      [0, "Thanks everyone, let's lock the launch plan today."],
+      [4, "If we drop calendar sync from version one, we can ship on January 12."],
+      [10, "Okay, agreed. Calendar sync moves to version two and we launch on January 12."],
+      [16, "Maya, I need the API documentation finished by Friday."],
+      [21, "Sure, I'll have the API docs done by Friday."],
+      [25, "Jordan, please book the stakeholder demo for next week."],
+      [30, "Maybe one day we could build a desktop app, but not now."],
+      [35, "Who owns the pricing page copy? Nobody knows yet, we'll figure it out later."]
+    ],
+    "expected": {
+      "tasks": [
+        {"match": ["api doc"], "owner": "maya@acme.test", "due": "2026-12-04"},
+        {"match": ["demo"], "owner": "jordan@acme.test", "due": "2026-12-11"}
+      ],
+      "decisions": [["calendar sync", "january 12"]],
+      "open_questions": [["pricing"]],
+      "summary_must": ["january 12"],
+      "not_tasks": ["desktop app"]
+    }
+  },
+  {
+    "id": "payment-incident",
+    "about": "ASAP becomes urgent with a real date; a speech-to-text typo in a name (Mya); several owners",
+    "title": "Payment incident call",
+    "date": "2026-11-23T09:00:00",
+    "timezone": "Asia/Kolkata",
+    "participants": [["Maya", "maya@acme.test"], ["Alex", "alex@acme.test"], ["Jordan", "jordan@acme.test"]],
+    "transcript": [
+      [0, "The payment bug is breaking checkout again for card payments."],
+      [5, "Mya, please fix the payment bug as soon as possible, it is urgent."],
+      [11, "Alex, can you update the status page today?"],
+      [15, "Yes, I'll update the status page."],
+      [19, "Jordan, write the incident report by Thursday."]
+    ],
+    "expected": {
+      "tasks": [
+        {"match": ["payment"], "owner": "maya@acme.test", "due": "2026-11-25", "priority": "urgent"},
+        {"match": ["status page"], "owner": "alex@acme.test"},
+        {"match": ["incident report"], "owner": "jordan@acme.test", "due": "2026-11-26"}
+      ],
+      "decisions": [],
+      "summary_must": ["payment"],
+      "not_tasks": []
+    }
+  },
+  {
+    "id": "release-room",
+    "about": "In-room follow-up questions; a later answer changes the decision (final outcome wins)",
+    "title": "Release planning",
+    "date": "2026-12-01T09:30:00",
+    "timezone": "UTC",
+    "participants": [["Maya", "maya@acme.test"], ["Alex", "alex@acme.test"]],
+    "transcript": [
+      [0, "Good morning everyone, welcome to the release planning meeting in the main hall."],
+      [5, "Our plan was to launch the mobile beta on December 15th."],
+      [10, "Sorry, quick question from the back. Is the payment bug fixed already?"],
+      [15, "Good question. No, the payment bug is not fixed yet, so we will move the beta to December 22nd."],
+      [22, "And will Android and iPhone launch together?"],
+      [26, "Yes, both platforms launch together on the 22nd."],
+      [31, "Alex, can you update the release notes by Friday?"]
+    ],
+    "expected": {
+      "tasks": [
+        {"match": ["release notes"], "owner": "alex@acme.test", "due": "2026-12-04"}
+      ],
+      "decisions": [["beta", "22"]],
+      "follow_ups": [["payment bug"], ["android", "iphone"]],
+      "summary_must": ["22"],
+      "not_tasks": []
+    }
+  },
+  {
+    "id": "hiring-notes",
+    "about": "A task that only exists in a typed note; a parked topic that must not become a task",
+    "title": "Hiring sync",
+    "date": "2026-11-18T11:30:00",
+    "timezone": "UTC",
+    "participants": [["Maya", "maya@acme.test"], ["Jordan", "jordan@acme.test"]],
+    "notes": [["Maya", "Maya will set up the interview panel by Monday"]],
+    "transcript": [
+      [0, "Let's go through hiring for the support team."],
+      [6, "We agreed to open two support engineer roles in January."],
+      [12, "Should we also hire a designer? Let's park that until next quarter."],
+      [18, "Jordan will draft the job descriptions for the two roles."]
+    ],
+    "expected": {
+      "tasks": [
+        {"match": ["job description"], "owner": "jordan@acme.test"},
+        {"match": ["interview panel"], "owner": "maya@acme.test", "due": "2026-11-23"}
+      ],
+      "decisions": [["two", "support"]],
+      "summary_must": ["support"],
+      "not_tasks": ["designer"]
+    }
+  },
+  {
+    "id": "checkout-slides",
+    "about": "Numbers that were only on the big screen must reach the summary; ASAP owner from the room",
+    "title": "Checkout health review",
+    "date": "2026-11-24T15:00:00",
+    "timezone": "UTC",
+    "participants": [["Maya", "maya@acme.test"], ["Alex", "alex@acme.test"]],
+    "slides": [[2, "Checkout health", "Failed checkouts - 4.2 percent\nGoal - under 1 percent before beta\nError E-4021 Card token expired"]],
+    "transcript": [
+      [0, "Let's look at the checkout numbers on the screen."],
+      [5, "As you can see, this number is far too high."],
+      [10, "We want to bring it below the goal shown here before the beta."],
+      [15, "Maya, please own that and fix it as soon as possible."]
+    ],
+    "expected": {
+      "tasks": [
+        {"match": ["checkout", "failed", "e-4021", "token", "payment"], "owner": "maya@acme.test", "priority": "urgent"}
+      ],
+      "decisions": [],
+      "summary_must": ["4.2"],
+      "not_tasks": []
+    }
+  }
+]
