@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tasks board · MeetMind</title>
+  <link rel="icon" href="assets/logo.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/style.css">
+  <script src="js/theme.js"></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+
+<div class="app">
+  <aside class="sidebar" id="sidebar" aria-label="Sidebar">
+    <a class="brand" href="admin.html" data-home-link><img src="assets/logo.svg" alt="">MeetMind</a>
+    <nav class="nav" aria-label="Main">
+      <a class="nav-item" href="admin.html" data-admin-only hidden>
+        <svg class="icon"><use href="assets/icons.svg#i-dashboard"/></svg>Dashboard
+      </a>
+      <a class="nav-item" href="create-meeting.html" data-admin-only hidden>
+        <svg class="icon"><use href="assets/icons.svg#i-plus"/></svg>New meeting
+      </a>
+      <a class="nav-item" href="admin.html#meetings" data-admin-only hidden>
+        <svg class="icon"><use href="assets/icons.svg#i-calendar"/></svg>Meetings
+      </a>
+      <a class="nav-item" href="admin.html#team" data-admin-only hidden>
+        <svg class="icon"><use href="assets/icons.svg#i-users"/></svg>Team
+      </a>
+      <a class="nav-item" href="member.html" data-member-only hidden>
+        <svg class="icon"><use href="assets/icons.svg#i-dashboard"/></svg>My work
+      </a>
+      <a class="nav-item" href="member.html#meetings" data-member-only hidden>
+        <svg class="icon"><use href="assets/icons.svg#i-calendar"/></svg>My meetings
+      </a>
+      <a class="nav-item" href="tasks.html" aria-current="page">
+        <svg class="icon"><use href="assets/icons.svg#i-tasks"/></svg>Tasks board
+      </a>
+      <a class="nav-item" href="ask.html">
+        <svg class="icon"><use href="assets/icons.svg#i-sparkles"/></svg>Ask MeetMind
+      </a>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="user-chip">
+        <span class="avatar" aria-hidden="true"></span>
+        <div class="who"><div class="name"></div><div class="role"></div></div>
+        <a class="btn btn-ghost btn-icon" href="login.html?signout=1" aria-label="Sign out" title="Sign out">
+          <svg class="icon"><use href="assets/icons.svg#i-logout"/></svg>
+        </a>
+      </div>
+    </div>
+  </aside>
+
+  <div>
+    <header class="topbar">
+      <button class="btn btn-ghost btn-icon" type="button" data-nav-toggle aria-controls="sidebar"
+              aria-expanded="false" aria-label="Open menu">
+        <svg class="icon icon-lg"><use href="assets/icons.svg#i-menu"/></svg>
+      </button>
+      <a class="brand" href="admin.html" data-home-link><img src="assets/logo.svg" alt="">MeetMind</a>
+      <span class="avatar" aria-hidden="true"></span>
+    </header>
+
+    <main class="main" id="main">
+      <div class="main-inner">
+        <div class="page-header">
+          <div>
+            <h1 id="board-title">Tasks board</h1>
+            <p id="board-subtitle">Every approved task from your meetings. Drag a card, or use its status menu, to move it.</p>
+          </div>
+        </div>
+
+        <form class="filters card" id="filters" role="search" aria-label="Filter tasks">
+          <div class="field field-search">
+            <label class="label" for="f-q">Search</label>
+            <input class="input" id="f-q" name="q" type="search" placeholder="Words in the task title…" maxlength="200">
+          </div>
+          <div class="field">
+            <label class="label" for="f-priority">Priority</label>
+            <select class="input" id="f-priority" name="priority">
+              <option value="">Any priority</option>
+              <option value="urgent">Urgent</option><option value="high">High</option>
+              <option value="normal">Normal</option><option value="low">Low</option>
+            </select>
+          </div>
+          <div class="field" id="f-assignee-field" hidden>
+            <label class="label" for="f-assignee">Owner</label>
+            <select class="input" id="f-assignee" name="assignee"><option value="">Anyone</option><option value="none">Unassigned</option></select>
+          </div>
+          <div class="field">
+            <label class="label" for="f-due">Due</label>
+            <select class="input" id="f-due" name="due">
+              <option value="">Any time</option><option value="overdue">Overdue</option>
+              <option value="week">Next 7 days</option><option value="none">No due date</option>
+            </select>
+          </div>
+          <button class="btn btn-ghost" type="reset" id="f-clear">Clear</button>
+        </form>
+
+        <p class="small muted" id="board-status" aria-live="polite"></p>
+        <div class="board" id="board" aria-label="Tasks by status"></div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script src="js/ui.js"></script>
+<script src="js/api.js"></script>
+<script src="js/app.js"></script>
+<script src="js/pages/board.js"></script>
+</body>
+</html>
