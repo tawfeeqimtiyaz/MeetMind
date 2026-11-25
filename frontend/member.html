@@ -6,6 +6,7 @@
   <title>My work · MeetMind</title>
   <link rel="icon" href="assets/logo.svg" type="image/svg+xml">
   <link rel="stylesheet" href="css/style.css">
+  <script src="js/theme.js"></script>
 </head>
 <body>
 <a class="skip-link" href="#main">Skip to content</a>
@@ -25,6 +26,9 @@
       </a>
       <a class="nav-item" href="admin.html" data-admin-only hidden>
         <svg class="icon"><use href="assets/icons.svg#i-shield"/></svg>Admin dashboard
+      </a>
+      <a class="nav-item" href="tasks.html">
+        <svg class="icon"><use href="assets/icons.svg#i-tasks"/></svg>Tasks board
       </a>
       <a class="nav-item" href="ask.html">
         <svg class="icon"><use href="assets/icons.svg#i-sparkles"/></svg>Ask MeetMind
@@ -80,7 +84,7 @@
             <h2 class="card-title" id="my-tasks-title">
               <svg class="icon"><use href="assets/icons.svg#i-tasks"/></svg>My tasks
             </h2>
-            <label class="checkbox-label small"><input type="checkbox" id="show-done"> Show completed</label>
+            <div class="row"><label class="checkbox-label small"><input type="checkbox" id="show-done"> Show completed</label><a class="btn btn-ghost btn-sm" href="tasks.html">Board view</a></div>
           </div>
           <div class="task-list" id="task-list"></div>
         </section>

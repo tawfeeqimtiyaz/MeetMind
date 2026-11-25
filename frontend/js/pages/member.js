@@ -21,13 +21,13 @@
   const showDone = document.getElementById("show-done");
 
   async function loadTasks() {
-    replace(taskList, loading());
+    replace(taskList, M.skeleton(3));
     try {
       const { items } = await api.get("/tasks/mine");
       const visible = showDone.checked ? items : items.filter((t) => t.status !== "done");
       if (!visible.length) {
         replace(taskList, empty(items.length ? "All done. Nice work!" : "No tasks assigned to you yet.",
-          items.length ? null : "Tasks appear here once an admin approves them after a meeting."));
+          items.length ? null : "Tasks appear here once an admin approves them after a meeting.", { icon: "i-tasks" }));
         return;
       }
       replace(taskList, visible.map((t) => M.taskRow(t, { canToggle: true, showMeeting: true, onChange: refresh })));
@@ -42,11 +42,11 @@
 
   async function loadMeetings() {
     const list = document.getElementById("meeting-list");
-    replace(list, loading());
+    replace(list, M.skeleton(3));
     try {
       const { items } = await api.get("/meetings?limit=50");
       if (!items.length) {
-        replace(list, empty("No meetings yet.", "Meetings you’re invited to show up here."));
+        replace(list, empty("No meetings yet.", "Meetings you’re invited to show up here.", { icon: "i-calendar" }));
         return;
       }
       replace(list, items.map((m) =>
