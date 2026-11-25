@@ -15,7 +15,7 @@
   let asking = false;
   let turn = 0;
   let history = []; // earlier turns, so follow-up questions ("and who owns that?") make sense
-  const TOOLS = { search_meeting: "meeting", search_documents: "documents", search_meetings: "meetings", list_tasks: "tasks", list_meetings: "meeting list", get_meeting_details: "meeting notes", rag: "search" };
+  const TOOLS = { search_meeting: "meeting", search_documents: "documents", search_slides: "slides", search_meetings: "meetings", list_tasks: "tasks", list_meetings: "meeting list", get_meeting_details: "meeting notes", rag: "search" };
 
   const shortModel = (name) => String(name || "").split(/[:/]/).pop();
 
@@ -27,12 +27,13 @@
 
   function sourceCard(src, id) {
     const where = src.kind === "notes" ? "Meeting notes" : src.kind === "document" ? `📄 ${src.document_name}, page ${src.page}`
+      : src.kind === "slide" ? "🖼 Slide" + (src.start != null ? " shown at " + timestamp(src.start) : "")
       : src.kind === "task" ? "Task" : src.kind === "meeting" ? "Meeting overview"
       : src.start != null ? "at " + timestamp(src.start) : "Transcript";
     // documents are often Markdown: show the words, not the ** and ## symbols
     const plain = src.text.replace(/\*\*|__|`/g, "").replace(/(^|\s)#{1,6}\s+/g, "$1");
     const text = plain.length > 320 ? plain.slice(0, 320).trimEnd() + "…" : plain;
-    const tab = src.kind === "document" ? "#documents" : src.kind === "task" ? "#tasks" : src.kind === "notes" ? "#notes" : src.start != null ? "#transcript" : "";
+    const tab = src.kind === "document" ? "#documents" : src.kind === "slide" ? "#slides" : src.kind === "task" ? "#tasks" : src.kind === "notes" ? "#notes" : src.start != null ? "#transcript" : "";
     return h("li", { class: "source", id },
       h("a", { class: "source-link", href: "meeting.html?id=" + encodeURIComponent(src.meeting_id) + tab },
         h("span", { class: "source-n" }, String(src.n)),

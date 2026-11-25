@@ -41,7 +41,7 @@
 
   /* ================= section tabs ================= */
 
-  const TABS = ["overview", "tasks", "notes", "transcript", "documents", "recording"];
+  const TABS = ["overview", "tasks", "notes", "slides", "transcript", "documents", "recording"];
   let currentTab = null;
 
   function visibleTabs() { return TABS.filter((t) => !$("mtab-" + t).hidden); }
@@ -114,8 +114,8 @@
     if (lastStatus && lastStatus !== meeting.status) announce(meeting.status);
     lastStatus = meeting.status;
     render();
-    const docsWaiting = meeting.documents.some((d) => d.status === "queued");
-    if (isBusy(meeting) || docsWaiting) pollTimer = setTimeout(load, 3000);
+    const waiting = meeting.documents.some((d) => d.status === "queued") || meeting.slides.some((s) => s.status === "queued");
+    if (isBusy(meeting) || waiting) pollTimer = setTimeout(load, 3000);
   }
 
   function announce(status) {
@@ -150,6 +150,7 @@
     setCount("tasks", meeting.tasks.length, isAdmin && meeting.status === "review" && drafts);
     setCount("notes", meeting.notes.length);
     setCount("documents", meeting.documents.length);
+    setCount("slides", meeting.slides.length);
     if (firstRender) showTab(defaultTab());
 
     renderBanner();
@@ -162,6 +163,7 @@
     renderRecordings();
     renderNotes();
     renderDocuments();
+    renderSlides();
     renderPeople();
     renderTranscriptTab();
     renderChatState();
@@ -217,6 +219,7 @@
     queued: "Waiting for a free worker…",
     preparing: "Joining the recorded pieces into one file…",
     transcribing: "Turning speech into text…",
+    reading_slides: "AI is reading the slides that were on the screen…",
     analysing: "AI is writing the summary, decisions, questions & answers and tasks…",
   };
 
@@ -227,7 +230,10 @@
     const live = rec.mode && rec.mode !== "upload";
     const steps = [["saved", live ? "Recorded" : "Uploaded"]];
     if (live) steps.push(["preparing", "Preparing audio"]);
-    steps.push(["transcribing", "Transcribing"], ["analysing", "Analysing"], ["ready", isAdmin ? "Ready for review" : "Ready"]);
+    steps.push(["transcribing", "Transcribing"]);
+    const video = rec.mode === "presentation" || rec.mode === "screen" || String(rec.content_type || "").startsWith("video");
+    if (video) steps.push(["reading_slides", "Reading slides"]);
+    steps.push(["analysing", "Analysing"], ["ready", isAdmin ? "Ready for review" : "Ready"]);
     const stage = rec.status === "queued" ? steps[1][0] : rec.stage || "transcribing";
     const current = Math.max(1, steps.findIndex(([key]) => key === stage));
     replace($("stepper"), steps.map(([, label], i) => h("li", {
@@ -486,8 +492,17 @@
   function currentMode() { return (document.querySelector("input[name=mode]:checked") || {}).value || "room"; }
   function updateModeHelp() {
     const mode = currentMode();
-    $("share-help").hidden = mode === "room";
-    $("noise").closest(".field").hidden = mode !== "room";
+    const help = $("share-help");
+    help.hidden = mode === "room";
+    if (mode === "presentation") {
+      replace(help, "After you press Start, choose the ", h("strong", {}, "screen or window that's on the big screen"),
+        " (the presentation). Voices come from the room microphone. During the meeting you can also press ",
+        h("strong", {}, "📷 Snap screen"), " to photograph it.");
+    } else {
+      replace(help, "After you press Start, choose the meeting's browser tab (tick ", h("strong", {}, "Share tab audio"),
+        ") or your entire screen (tick ", h("strong", {}, "Share system audio"), ", Windows). Works in Chrome and Edge.");
+    }
+    $("noise").closest(".field").hidden = !(mode === "room" || mode === "presentation");
   }
   document.querySelectorAll("input[name=mode]").forEach((r) => r.addEventListener("change", updateModeHelp));
   updateModeHelp();
@@ -517,7 +532,8 @@
         h("div", {},
           h("div", { class: "title" }, r.important ? "★ " : "", r.original_filename),
           h("div", { class: "meta" },
-            h("span", {}, { room: "In the room", online: "Online meeting", screen: "Online + screen", upload: "Uploaded" }[r.mode] || r.mode),
+            h("span", {}, { room: "In the room", presentation: "Room + presentation", online: "Online meeting",
+              screen: "Online + screen", upload: "Uploaded" }[r.mode] || r.mode),
             r.duration_seconds ? h("span", {}, timestamp(r.duration_seconds)) : null,
             h("span", {}, M.formatBytes(r.size_bytes)),
             h("span", {}, formatDateTime(r.created_at)),
@@ -647,6 +663,7 @@
 
   document.addEventListener("keydown", (e) => {
     if (!recorder || $("focus").hidden || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (document.querySelector("dialog[open]")) return; // the camera or a confirm dialog handles its own keys
     if (e.target.closest("input, textarea, select, [contenteditable]")) {
       if (e.key === "Escape") e.target.blur();
       return;
@@ -661,6 +678,9 @@
     } else if (e.key === "n" || e.key === "N") {
       e.preventDefault();
       $("focus-note").focus();
+    } else if (e.key === "s" || e.key === "S") {
+      e.preventDefault();
+      snapScreen();
     } else if (e.key === "Escape") {
       e.preventDefault();
       showFocus(false);
@@ -973,6 +993,115 @@
     try { await api.del(`/documents/${d.id}`); load(); } catch (err) { toast(err.message, "error"); }
   }
 
+  /* ================= slides: what was on the big screen ================= */
+
+  function renderSlides() {
+    const slides = meeting.slides || [];
+    if (!slides.length) {
+      replace($("slides"), empty("No slides yet.",
+        "Record with “In the room + presentation”, press 📷 Snap screen while recording, or add a photo of the screen.",
+        { icon: "i-eye" }));
+      return;
+    }
+    replace($("slides"), slides.map((s) => {
+      const mine = s.added_by_id === user.id;
+      const lines = (s.text || "").split("\n").filter((x) => x.trim());
+      return h("article", { class: "slide-card" + (s.status === "failed" ? " is-failed" : ""), id: "slide-" + s.id },
+        h("a", { class: "slide-thumb", href: s.image_url || "#", target: "_blank", rel: "noopener", title: "Open full size" },
+          s.image_url ? h("img", { src: s.image_url, alt: s.title ? "Slide: " + s.title : "Slide", loading: "lazy" }) : null),
+        mine || isAdmin ? h("button", { class: "btn btn-icon btn-sm slide-delete", type: "button", "aria-label": "Delete slide",
+          title: "Delete", onclick: () => deleteSlide(s) }, icon("i-close")) : null,
+        h("div", { class: "slide-body" },
+          h("div", { class: "slide-meta" },
+            s.offset_seconds != null
+              ? h("button", { class: "note-time", type: "button", title: "Play from here", onclick: () => seekTo(s.offset_seconds) }, timestamp(s.offset_seconds))
+              : null,
+            h("span", { class: "small muted" }, s.source === "photo" ? "📷 Photo" + (s.added_by ? " · " + s.added_by : "") : "🖥 Screen recording"),
+            s.status === "queued" ? h("span", { class: "loading-inline" }, h("span", { class: "spinner", "aria-hidden": "true" }), "Reading") : null),
+          h("div", { class: "slide-title" }, s.title || (s.status === "ready" ? "Untitled slide" : s.status === "failed" ? "Couldn’t read this slide" : "Reading…")),
+          s.error ? h("p", { class: "small " + (s.status === "failed" ? "text-danger" : "muted") }, s.error) : null,
+          lines.length ? h("details", { class: "slide-text" },
+            h("summary", {}, lines.slice(0, 2).join(" · ").slice(0, 140) + (lines.length > 2 || lines.join("").length > 140 ? " …" : "")),
+            h("div", { class: "small" }, lines.map((l) => h("div", {}, l)))) : null,
+        ));
+    }));
+  }
+
+  async function uploadSlidePhoto(blob, name, offset) {
+    const body = new FormData();
+    body.append("file", blob, name);
+    if (offset != null) body.append("offset_seconds", String(Math.round(offset)));
+    await api.upload(`/meetings/${id}/slides`, body);
+    toast("📷 Photo added. AI is reading the slide…");
+    load();
+  }
+
+  $("slide-file").addEventListener("change", async (e) => {
+    const file = e.target.files[0];
+    e.target.value = "";
+    if (!file) return;
+    try { await uploadSlidePhoto(file, file.name, recording() ? recorder.elapsed() : null); }
+    catch (err) { toast(err.message, "error"); }
+  });
+
+  async function deleteSlide(s) {
+    if (!(await M.confirmDialog({ title: "Delete this slide?", body: "It is removed from the meeting and from search.", confirmLabel: "Delete", danger: true }))) return;
+    try { await api.del(`/slides/${s.id}`); load(); } catch (err) { toast(err.message, "error"); }
+  }
+
+  /* --- snap the big screen with the camera --- */
+  let cameraStream = null;
+  let snapAt = null;
+
+  function closeCamera() {
+    if (cameraStream) cameraStream.getTracks().forEach((t) => t.stop());
+    cameraStream = null;
+    if ($("camera-dialog").open) $("camera-dialog").close();
+  }
+
+  async function snapScreen() {
+    snapAt = recording() ? recorder.elapsed() : null; // the moment the button was pressed
+    const dialog = $("camera-dialog");
+    $("camera-capture").disabled = true;
+    $("camera-hint").textContent = "Starting the camera…";
+    dialog.showModal();
+    try {
+      cameraStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false,
+      });
+      $("camera-video").srcObject = cameraStream;
+      $("camera-capture").disabled = false;
+      $("camera-hint").textContent = "Point the camera at the screen so the whole slide is visible.";
+    } catch (err) {
+      $("camera-hint").textContent = "No camera available here. Choose a photo instead (on a phone this opens the camera).";
+    }
+  }
+
+  $("camera-capture").addEventListener("click", () => {
+    const video = $("camera-video");
+    if (!video.videoWidth) return;
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.getContext("2d").drawImage(video, 0, 0);
+    const at = snapAt;
+    closeCamera();
+    canvas.toBlob(async (blob) => {
+      try { await uploadSlidePhoto(blob, "screen.jpg", at); } catch (err) { toast(err.message, "error"); }
+    }, "image/jpeg", 0.9);
+  });
+  $("camera-file").addEventListener("change", async (e) => {
+    const file = e.target.files[0];
+    e.target.value = "";
+    const at = snapAt;
+    closeCamera();
+    if (!file) return;
+    try { await uploadSlidePhoto(file, file.name, at); } catch (err) { toast(err.message, "error"); }
+  });
+  $("camera-cancel").addEventListener("click", closeCamera);
+  $("camera-dialog").addEventListener("close", () => { if (cameraStream) closeCamera(); });
+  $("rec-snap").addEventListener("click", snapScreen);
+
   /* ================= people ================= */
 
   function renderPeople() {
@@ -1009,11 +1138,25 @@
     replace(body, M.skeleton(5));
     try {
       const { transcript } = await api.get(`/meetings/${id}/transcript`);
-      const lines = transcript.segments.length
-        ? transcript.segments.map((s) => h("p", { class: "transcript-line" },
-            h("button", { class: "ts", type: "button", title: "Play from here", onclick: () => seekTo(s.start) }, timestamp(s.start)),
-            s.speaker ? h("span", { class: "speaker" }, s.speaker) : null, s.text))
-        : [h("p", { class: "transcript-line" }, transcript.text)];
+      // slides appear in the transcript at the moment they were shown
+      const pending = (meeting.slides || []).filter((s) => s.offset_seconds != null && s.status === "ready")
+        .sort((a, b) => a.offset_seconds - b.offset_seconds);
+      const marker = (s) => h("p", { class: "transcript-slide" },
+        h("button", { type: "button", onclick: () => { showTab("slides", { remember: true });
+          const card = document.getElementById("slide-" + s.id); if (card) card.scrollIntoView({ behavior: "smooth", block: "center" }); } },
+        "🖼 Slide shown: " + (s.title || "untitled")));
+      const lines = [];
+      if (transcript.segments.length) {
+        for (const seg of transcript.segments) {
+          while (pending.length && pending[0].offset_seconds <= (seg.start || 0)) lines.push(marker(pending.shift()));
+          lines.push(h("p", { class: "transcript-line" },
+            h("button", { class: "ts", type: "button", title: "Play from here", onclick: () => seekTo(seg.start) }, timestamp(seg.start)),
+            seg.speaker ? h("span", { class: "speaker" }, seg.speaker) : null, seg.text));
+        }
+        pending.forEach((s) => lines.push(marker(s)));
+      } else {
+        lines.push(h("p", { class: "transcript-line" }, transcript.text));
+      }
       replace(body, lines, h("p", { class: "muted small", id: "transcript-nomatch", hidden: true }, "No lines match your search."));
       $("transcript-filter").hidden = false;
       filterTranscript();
@@ -1031,6 +1174,7 @@
       line.hidden = !hit;
       shown += hit;
     });
+    document.querySelectorAll("#transcript-body .transcript-slide").forEach((m) => { m.hidden = Boolean(q); });
     const none = $("transcript-nomatch");
     if (none) none.hidden = shown > 0;
   }
@@ -1058,7 +1202,7 @@
   let asking = false;
   let turn = 0;
   const TOOL_LABELS = {
-    search_meeting: "this meeting", search_documents: "documents", search_meetings: "other meetings",
+    search_meeting: "this meeting", search_documents: "documents", search_slides: "slides", search_meetings: "other meetings",
     list_tasks: "tasks", list_meetings: "meeting list", get_meeting_details: "meeting notes", rag: "search",
   };
 
@@ -1073,13 +1217,21 @@
   function sourceItem(s, anchor) {
     let where = s.meeting_title || "";
     if (s.kind === "document") where = `📄 ${s.document_name}, page ${s.page}`;
+    else if (s.kind === "slide") where = "🖼 Slide" + (s.meeting_id === id ? "" : " · " + where);
     else if (s.kind === "task") where = "Task · " + (s.meeting_title || "");
     else if (s.kind === "notes") where = "Notes · " + where;
     return h("li", { class: "chat-source", id: anchor },
       h("span", { class: "source-n" }, String(s.n)),
       h("span", { class: "small" }, where),
       s.start != null && s.meeting_id === id
-        ? h("button", { class: "btn btn-ghost btn-sm", type: "button", onclick: () => seekTo(s.start) }, "▶ " + timestamp(s.start)) : null);
+        ? h("button", { class: "btn btn-ghost btn-sm", type: "button", onclick: () => seekTo(s.start) }, "▶ " + timestamp(s.start)) : null,
+      s.kind === "slide" && s.slide_id && s.meeting_id === id
+        ? h("button", { class: "btn btn-ghost btn-sm", type: "button", onclick: () => {
+          setChatOpen(false);
+          showTab("slides", { remember: true });
+          const card = document.getElementById("slide-" + s.slide_id);
+          if (card) { card.scrollIntoView({ behavior: "smooth", block: "center" }); card.classList.add("is-highlight"); setTimeout(() => card.classList.remove("is-highlight"), 2000); }
+        } }, "View slide") : null);
   }
 
   function addMessage(who, ...content) {
