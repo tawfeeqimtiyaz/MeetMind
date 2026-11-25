@@ -1,0 +1,33 @@
+# Runs on every push and pull request: the backend tests (fake AI models, no API keys needed)
+# in the same Docker image used locally, and a syntax check of every frontend script.
+name: tests
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use the example settings (tests don't need real keys)
+        run: cp .env.example .env
+      - name: Run the backend tests in Docker
+        run: docker compose --profile test run --rm --build tests
+
+  frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Check every script parses
+        run: for f in frontend/js/*.js frontend/js/pages/*.js; do node --check "$f" || exit 1; done
