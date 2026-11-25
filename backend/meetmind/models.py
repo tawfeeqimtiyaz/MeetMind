@@ -90,6 +90,9 @@ class Meeting(TimestampMixin, Base):
     notes: Mapped[list["MeetingNote"]] = relationship(
         back_populates="meeting", cascade="all, delete-orphan", order_by="MeetingNote.created_at"
     )
+    slides: Mapped[list["Slide"]] = relationship(
+        back_populates="meeting", cascade="all, delete-orphan", order_by="Slide.created_at"
+    )
     documents: Mapped[list["Document"]] = relationship(
         back_populates="meeting", cascade="all, delete-orphan", order_by="Document.created_at"
     )
@@ -209,6 +212,28 @@ class Document(TimestampMixin, Base):
 
     meeting: Mapped[Meeting] = relationship(back_populates="documents")
     uploaded_by: Mapped[User | None] = relationship()
+
+
+class Slide(TimestampMixin, Base):
+    """What was shown on the screen during the meeting: a frame taken from a screen recording, or a photo
+    of the big screen. A vision model reads it, so its numbers and names reach the summary and search."""
+    __tablename__ = "slides"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    meeting_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("meetings.id", ondelete="CASCADE"), index=True)
+    recording_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("recordings.id", ondelete="SET NULL"))
+    added_by_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    source: Mapped[str] = mapped_column(String(20))  # screen (from a screen recording) | photo
+    offset_seconds: Mapped[float | None] = mapped_column()  # when it was shown, in the recording
+    storage_path: Mapped[str] = mapped_column(String(500))
+    status: Mapped[str] = mapped_column(String(20), default="queued")  # queued | ready | failed
+    error: Mapped[str | None] = mapped_column(Text)
+    title: Mapped[str | None] = mapped_column(String(300))
+    text: Mapped[str | None] = mapped_column(Text)  # everything readable: text, numbers, codes, chart values
+    ai_model: Mapped[str | None] = mapped_column(String(120))
+
+    meeting: Mapped[Meeting] = relationship(back_populates="slides")
+    added_by: Mapped[User | None] = relationship()
 
 
 class AgentRun(TimestampMixin, Base):
