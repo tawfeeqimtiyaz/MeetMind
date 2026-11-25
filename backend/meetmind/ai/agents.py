@@ -24,7 +24,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import sessionmaker
 
 from ..config import Settings
-from ..models import Document, Meeting, MeetingParticipant, Task, User
+from ..models import Document, Meeting, MeetingParticipant, Slide, Task, User
 from .llm import AIUnavailableError, chat_providers, message_text
 from .rag import Hit, RAGService, cited_numbers, hit_out, keyword_terms, source_label
 from .transcription import format_timestamp
@@ -91,6 +91,7 @@ How to work:
   transcript -> attached documents -> other meetings -> tasks) before concluding.
 - Questions about who does what, deadlines, overdue or urgent work: use list_tasks.
 - Questions about documentation, specs, bug reports, errors or logs: use search_documents.
+- Questions about what was shown on the screen (a slide, chart, table, number or code on the screen): use search_slides.
 - Questions about earlier or other meetings, or a time period ("last month"): use search_meetings with dates.
 - Cite the evidence numbers like [1] or [2][3] right after the facts they support.
 - If after trying the relevant tools nothing answers the question, say clearly that you couldn't find it.
@@ -179,6 +180,29 @@ def build_tools(scope: AgentScope, sources: _Sources, used: list[str]):
                 lines.append(f"[{n}] {m.title} ({m.scheduled_at:%Y-%m-%d}{at})\n{text}")
             return "\n\n".join(lines) or "No matching passages found."
 
+    def db_search_slides(query: str, ids) -> str:
+        terms = _terms(query)
+        if not terms:
+            return "No matching slides found."
+        with sf() as db:
+            slides = db.scalars(_meeting_filter(select(Slide).join(Meeting).where(Slide.status == "ready"), ids)).all()
+            scored = []
+            for s in slides:
+                text = f"{s.title or ''}\n{s.text or ''}"
+                score = sum(1 for t in terms if t in text.lower())
+                if score:
+                    scored.append((score, s, text))
+            scored.sort(key=lambda x: -x[0])
+            lines = []
+            for _, s, text in scored[:5]:
+                n = sources.add(f"slide:{s.id}", {
+                    "kind": "slide", "meeting_id": str(s.meeting_id), "meeting_title": s.meeting.title,
+                    "scheduled_at": s.meeting.scheduled_at.isoformat(), "start": s.offset_seconds,
+                    "slide_id": str(s.id), "text": text.strip()})
+                at = f", shown at {format_timestamp(s.offset_seconds)}" if s.offset_seconds is not None else ""
+                lines.append(f"[{n}] Slide in {s.meeting.title}{at}\n{text.strip()[:900]}")
+            return "\n\n".join(lines) or "No matching slides found."
+
     def vector_or_text(query: str, ids, kinds, fallback, **filters) -> str:
         """Vector search first; if it finds nothing (or the index is down), search the saved text instead."""
         try:
@@ -192,11 +216,20 @@ def build_tools(scope: AgentScope, sources: _Sources, used: list[str]):
 
     @tool
     def search_meeting(query: str) -> str:
-        """Search the CURRENT meeting's transcript, typed notes, decisions and follow-up Q&A."""
+        """Search the CURRENT meeting's transcript, typed notes, decisions, follow-up Q&A and slides."""
         used.append("search_meeting")
         if not scope.focus_meeting_id:
             return "No current meeting. Use search_meetings instead."
-        return vector_or_text(query, [scope.focus_meeting_id], ["notes", "transcript"], db_search_transcripts)
+        return vector_or_text(query, [scope.focus_meeting_id], ["notes", "transcript", "slide"], db_search_transcripts)
+
+    @tool
+    def search_slides(query: str, all_meetings: bool = False) -> str:
+        """Search what was SHOWN ON THE SCREEN: slides, charts, tables, numbers and codes from screen recordings
+        and photos of the big screen. By default only the current meeting (if any); all_meetings=true searches
+        every meeting."""
+        used.append("search_slides")
+        ids = [scope.focus_meeting_id] if scope.focus_meeting_id and not all_meetings else meetings_scope()
+        return vector_or_text(query, ids, ["slide"], db_search_slides)
 
     @tool
     def search_documents(query: str, all_meetings: bool = False) -> str:
@@ -212,7 +245,7 @@ def build_tools(scope: AgentScope, sources: _Sources, used: list[str]):
         YYYY-MM-DD, e.g. for "last month" pass the first and last day of last month."""
         used.append("search_meetings")
         end = _parse_day(date_to)
-        return vector_or_text(query, meetings_scope(), ["notes", "transcript"], db_search_transcripts,
+        return vector_or_text(query, meetings_scope(), ["notes", "transcript", "slide"], db_search_transcripts,
                               date_from=_parse_day(date_from), date_to=end + timedelta(days=1) if end else None)
 
     @tool
@@ -326,7 +359,8 @@ def build_tools(scope: AgentScope, sources: _Sources, used: list[str]):
                 parts.append("Attached documents: " + ", ".join(d.filename for d in m.documents))
             return "\n".join(parts)
 
-    return [search_meeting, search_documents, search_meetings, list_tasks, list_meetings, get_meeting_details]
+    return [search_meeting, search_documents, search_slides, search_meetings, list_tasks, list_meetings,
+            get_meeting_details]
 
 
 def _graph(model, tools):
