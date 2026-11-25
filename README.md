@@ -14,7 +14,7 @@ questions and answers, and tasks with owners and deadlines. Ask it anything afte
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)
 ![Redis](https://img.shields.io/badge/Redis-7-DC382D?logo=redis&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-98%20passing-success)
+![Tests](https://img.shields.io/badge/tests-102%20passing-success)
 
 📘 **New here? Read the easy guide first: [docs/GUIDE.md](docs/GUIDE.md)**
 
@@ -51,6 +51,7 @@ questions and answers, and tasks with owners and deadlines. Ask it anything afte
 | Feature | What you get |
 |---|---|
 | 🔴 **Record in the browser** | Press *Record* during the meeting. **In the room** (laptop or conference microphone), **online** (sound of Zoom/Teams/Meet + your mic) or **online + screen** (video). Saved piece by piece while recording, so a dropped network or closed laptop loses almost nothing. |
+| 🎯 **Focus recording screen** | Full-screen recorder: big timer, live sound wave, notes box, keyboard shortcuts (**Space** pause, **M** mark, **N** note, **Esc** minimise). Other tabs show a "recording in progress" banner. |
 | ⚡ **Instant meetings** | *Record a meeting now* creates a meeting that starts immediately. |
 | 📝 **Live notes** | Anyone in the meeting can type notes or press ⭐ *Mark this moment*. Notes are time-stamped and given to the AI with the recording. |
 | ⬆️ **Upload** | Or upload MP3, WAV, M4A, MP4, WEBM, OGG, FLAC, MOV (up to 500 MB). |
@@ -62,8 +63,10 @@ questions and answers, and tasks with owners and deadlines. Ask it anything afte
 | 📎 **Documents & bug reports** | Attach PDFs, Word files, Markdown, logs… The assistant answers from them. |
 | 💬 **Ask MeetMind** | Ask about one meeting or **all** meetings. A multi-tool AI agent searches transcripts, notes, documents, tasks and other meetings, and cites its sources. |
 | ⏰ **Reminders** | Owners get emails before deadlines and when overdue; admins get a daily "what's important" summary. |
+| 📊 **Dashboard** | *Needs attention* (overdue and urgent tasks, reviews, failed processing, open recordings, starred recordings), tasks-by-status and workload-per-person charts, next 7 days. |
+| 🗂️ **Tasks board** | To do · In progress · Done. Drag cards or use the status menu; filter by text, priority, owner and due date. Admins see the team, members their own tasks. |
 | 👥 **Teams & roles** | Each company has its own workspace. Admins manage everything; members see meetings they attended and their own tasks. |
-| 📱 **Responsive** | Desktop and phone, automatic dark mode. |
+| 📱 **Responsive** | Desktop and phone. Dark mode follows the device or the theme switch in the sidebar. |
 
 ---
 
@@ -170,8 +173,18 @@ On a meeting page (or **Record a meeting now** on the dashboard), choose where t
 | **Online meeting** | Zoom, Teams, Meet on the same computer | The meeting's sound (share the tab with *Share tab audio*, or the screen with *Share system audio*) **+ your microphone**, mixed. |
 | **Online + screen** | Presentations, demos | The above + the screen as video. |
 
-While recording: a timer, a **sound-level meter** (warns "very quiet, move closer or use an external mic"),
-**Pause/Resume**, **⭐ Mark this moment**, notes (time-stamped automatically) and **Stop & process**.
+While recording, a **focus screen** fills the window: a big timer, a **live sound wave** (warns "very quiet, move closer
+or use an external mic"), **Pause/Resume**, **⭐ Mark this moment**, a notes box (time-stamped automatically) and
+**Stop & process**.
+
+| Key | Action |
+|---|---|
+| `Space` | Pause / resume |
+| `M` | Mark this moment ⭐ |
+| `N` | Write a note |
+| `Esc` | Minimise (a red bar with the timer and *Stop* stays at the top of the page) |
+
+After *Stop*, the meeting page shows the real progress: **Recorded → Preparing audio → Transcribing → Analysing → Ready**.
 
 **Why it's reliable**
 
@@ -368,16 +381,18 @@ MeetMind/
 │   │       ├── task_agent.py   # task assistant: propose → check → confirm → apply
 │   │       ├── checkpoint.py   # Postgres checkpointer
 │   │       └── qa.py           # direct per-meeting answer (fallback)
-│   └── tests/                  # 98 tests (fake AI models + in-memory vector store, no keys needed)
+│   └── tests/                  # 102 tests (fake AI models + in-memory vector store, no keys needed)
 │
 └── frontend/
     ├── index.html, signup.html, login.html, accept-invite.html
-    ├── admin.html, member.html, create-meeting.html, meeting.html, ask.html
+    ├── admin.html, member.html, create-meeting.html, meeting.html, tasks.html, ask.html
     ├── css/style.css, assets/
     └── js/
-        ├── ui.js, api.js, app.js, auth.js, tasks.js
+        ├── theme.js            # light / dark / same-as-device (loaded in <head>, no flash)
+        ├── ui.js               # toasts, dialogs, mobile menu, drop zones
+        ├── api.js, app.js, auth.js, tasks.js
         ├── recorder.js         # browser recorder: modes, mixing, level meter, piece upload, recovery
-        └── pages/              # admin.js, member.js, meeting.js, create-meeting.js, ask.js
+        └── pages/              # admin.js, member.js, meeting.js, board.js, create-meeting.js, ask.js
 ```
 
 ---
@@ -452,7 +467,7 @@ Interactive docs: **<http://localhost:8080/api/docs>** (click **Authorize**, pas
 | Method | Endpoint | Who | Purpose |
 |---|---|---|---|
 | POST | `/api/auth/signup`, `/api/auth/login`, `/api/auth/accept-invite` | anyone | Workspace, login, invite |
-| GET | `/api/auth/me`, `/api/dashboard` | signed in | Current user, stat cards |
+| GET | `/api/auth/me`, `/api/dashboard` | signed in | Current user; stat cards + insights (needs attention, tasks by status, workload, upcoming) |
 | GET/POST/PATCH | `/api/users`, `/api/users/invite`, `/api/users/{id}`, `/api/users/{id}/resend-invite` | admin | Team |
 | GET/POST | `/api/meetings` · POST `/api/meetings/instant` | signed in / admin | List, create, start now |
 | GET/PATCH/DELETE | `/api/meetings/{id}` | signed in / admin | View, edit, delete |
@@ -471,6 +486,7 @@ Interactive docs: **<http://localhost:8080/api/docs>** (click **Authorize**, pas
 | GET | `/api/meetings/{id}/assistant/runs` | admin | Assistant audit log |
 | POST | `/api/meetings/{id}/ask` | signed in | Ask about one meeting (agent) |
 | GET · POST | `/api/search?q=` · `/api/search/ask` | signed in | Search / ask across meetings (agent + RAG) |
+| GET | `/api/tasks?status=&priority=&assignee=&due=&q=` | signed in | Tasks board (admins: whole team, members: own) |
 | GET/PATCH/DELETE | `/api/tasks/mine`, `/api/tasks/{id}` | signed in | My tasks, update |
 | GET | `/api/health`, `/api/health/ready` | anyone | Health checks |
 
@@ -499,15 +515,19 @@ Errors always look like `{"error": {"code": "…", "message": "…", "details": 
 docker compose --profile test run --rm tests
 ```
 
-**98 tests** cover auth, permissions, organization isolation, uploads, **live recording** (pieces, missing pieces,
+**102 tests** cover auth, permissions, organization isolation, uploads, **live recording** (pieces, missing pieces,
 discard, playback with seeking), **notes** reaching the AI, **follow-up Q&A**, ASAP/priority rules, the AI
-pipeline (review, fallback, evidence, owner matching incl. typos, due dates, time zones), **documents**, the **task
+pipeline (review, fallback, evidence, owner matching incl. typos, due dates, time zones, **processing stages**),
+the **dashboard insights** and **tasks board** filters and access rules, **documents**, the **task
 assistant** (plan → confirm → emails, cancel, permissions), the **agent's tools** (access rules, text-search fallback),
 RAG (chunking, filters, hybrid search, citations), **reminders**, the **scheduler** and the **rescue** of interrupted
 recordings. They use fake AI models and an in-memory vector store: no API keys or internet needed.
 
 The project was also tested end to end in a real browser with a fake microphone playing a 1-minute meeting:
 record live → notes and ⭐ → AI results (with follow-up Q&A and a changed decision) → task assistant → document Q&A → playback.
+A second browser run checks the interface: theme switch, dialogs, dashboard charts, focus recorder and its shortcuts,
+progress steps, tabs, transcript search, mini player, chat drawer, tasks board, Ask page, the member view and
+phone layouts without sideways scrolling.
 
 ---
 
@@ -556,6 +576,7 @@ docker compose down -v                                      # stop AND delete al
 | **5. Live frontend** | All pages connected: dashboards, team, review, upload, chat, sign-up. |
 | **6. RAG with ChromaDB** | Chunking, embeddings, hybrid search, access filters, Ask MeetMind with citations. |
 | **6.5 Live meetings & agents** | Browser recording (room / online / screen), instant meetings, live notes and ⭐ moments, follow-up Q&A, priorities and ASAP, documents & bug reports, **task assistant** (plan → confirm), **multi-tool agent** with text-search fallback, LLM reranking, date filters, follow-up questions, playback from any moment, reminders, admin digest, scheduler, rescue of interrupted recordings. |
+| **6.6 Interface** | Dark mode switch, in-app dialogs and toasts, loading placeholders, meeting page tabs, real processing steps, focus recording screen with shortcuts, mini player, chat drawer, transcript search, dashboard *Needs attention* + charts, **tasks board**, chat-style Ask page. |
 
 ### 🔜 Next
 
