@@ -67,6 +67,18 @@ class Settings(BaseSettings):
     ollama_model: str = ""
     ollama_num_ctx: int = 16384
 
+    # ---------- Reading slides (vision models) ----------
+    # Tried in this order: Groq (fastest, many slides per meeting) -> NVIDIA -> local Ollama. Empty = skip that one.
+    groq_vision_model: str = "qwen/qwen3.8-27b"
+    nvidia_vision_model: str = "nvidia/nemotron-3.5-super-vl-120b-a12b"
+    ollama_vision_model: str = ""       # empty = use OLLAMA_MODEL (gemma4 can read images)
+    max_slides_per_recording: int = 60  # slides kept from one screen recording
+    # Slides are found as periods where the screen stands still; this "picture change" threshold (0-1) is
+    # only the fallback for recordings that never stand still. Same-template slides differ by only ~0.05.
+    slide_scene_threshold: float = 0.03
+    slide_min_gap_seconds: int = 4      # ignore changes closer together than this (animations, scrolling)
+    max_slide_image_mb: int = 10        # photos of the big screen
+
     # ---------- Live recording, documents, reminders ----------
     max_live_recording_mb: int = 4000   # recordings made in the browser (video can be large)
     live_chunk_max_mb: int = 25         # one piece of a live recording (sent every few seconds)
