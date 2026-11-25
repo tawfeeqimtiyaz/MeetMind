@@ -6,6 +6,7 @@
   <title>Dashboard · MeetMind</title>
   <link rel="icon" href="assets/logo.svg" type="image/svg+xml">
   <link rel="stylesheet" href="css/style.css">
+  <script src="js/theme.js"></script>
 </head>
 <body>
 <a class="skip-link" href="#main">Skip to content</a>
@@ -25,6 +26,9 @@
       </a>
       <a class="nav-item" href="#team">
         <svg class="icon"><use href="assets/icons.svg#i-users"/></svg>Team
+      </a>
+      <a class="nav-item" href="tasks.html">
+        <svg class="icon"><use href="assets/icons.svg#i-tasks"/></svg>Tasks board
       </a>
       <a class="nav-item" href="ask.html">
         <svg class="icon"><use href="assets/icons.svg#i-sparkles"/></svg>Ask MeetMind
@@ -88,13 +92,37 @@
           </div>
         </section>
 
-        <section class="card" id="review" aria-labelledby="review-title" hidden>
+        <div class="dash-grid">
+          <section class="card" id="attention-card" aria-labelledby="attention-title">
+            <div class="card-header">
+              <div>
+                <h2 class="card-title" id="attention-title">
+                  <svg class="icon"><use href="assets/icons.svg#i-shield"/></svg>Needs attention
+                </h2>
+                <p class="card-subtitle">Reviews, failed processing, overdue and urgent work, starred recordings.</p>
+              </div>
+            </div>
+            <div id="attention"></div>
+          </section>
+
+          <section class="card" aria-labelledby="upcoming-title">
+            <div class="card-header">
+              <h2 class="card-title" id="upcoming-title">
+                <svg class="icon"><use href="assets/icons.svg#i-calendar"/></svg>Next 7 days
+              </h2>
+            </div>
+            <div id="upcoming"></div>
+          </section>
+        </div>
+
+        <section class="card" id="tasks-overview" aria-labelledby="overview-title">
           <div class="card-header">
-            <h2 class="card-title" id="review-title">
-              <svg class="icon"><use href="assets/icons.svg#i-shield"/></svg>Needs your review
+            <h2 class="card-title" id="overview-title">
+              <svg class="icon"><use href="assets/icons.svg#i-tasks"/></svg>Tasks overview
             </h2>
+            <a class="btn btn-secondary btn-sm" href="tasks.html">Open tasks board</a>
           </div>
-          <div class="list" id="review-list"></div>
+          <div id="charts"></div>
         </section>
 
         <section class="card" id="meetings" aria-labelledby="meetings-title">
