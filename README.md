@@ -14,7 +14,7 @@ questions and answers, and tasks with owners and deadlines. Ask it anything afte
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)
 ![Redis](https://img.shields.io/badge/Redis-7-DC382D?logo=redis&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-115%20passing-success)
+![Tests](https://img.shields.io/badge/tests-121%20passing-success)
 
 📘 **New here? Read the easy guide first: [docs/GUIDE.md](docs/GUIDE.md)**
 
@@ -416,7 +416,7 @@ MeetMind/
 │   │       ├── task_agent.py   # task assistant: propose → check → confirm → apply
 │   │       ├── checkpoint.py   # Postgres checkpointer
 │   │       └── qa.py           # direct per-meeting answer (fallback)
-│   └── tests/                  # 115 tests (fake AI models + in-memory vector store, no keys needed)
+│   └── tests/                  # 121 tests (fake AI models + in-memory vector store, no keys needed)
 │
 └── frontend/
     ├── index.html, signup.html, login.html, accept-invite.html
@@ -554,14 +554,14 @@ Errors always look like `{"error": {"code": "…", "message": "…", "details": 
 docker compose --profile test run --rm tests
 ```
 
-**115 tests** cover auth, permissions, organization isolation, uploads, **live recording** (pieces, missing pieces,
+**121 tests** cover auth, permissions, organization isolation, uploads, **live recording** (pieces, missing pieces,
 discard, playback with seeking), **notes** reaching the AI, **follow-up Q&A**, ASAP/priority rules, the AI
 pipeline (review, fallback, evidence, owner matching incl. typos, due dates, time zones, **processing stages**),
 the **dashboard insights** and **tasks board** filters and access rules, **documents**, the **task
 assistant** (plan → confirm → emails, cancel, permissions), the **agent's tools** (access rules, text-search fallback),
 RAG (chunking, filters, hybrid search, citations), **reminders**, the **scheduler**, the **rescue** of interrupted
 recordings and **slides** (photos and their access rules, slides found in real generated videos incl. same-template
-decks, repeats dropped, slides reaching the analysis, search and the agent, PowerPoint decks). They use fake AI models
+decks, repeats dropped, slides reaching the analysis, search and the agent, PowerPoint decks) and the **eval scorers**. They use fake AI models
 and an in-memory vector store: no API keys or internet needed.
 
 The project was also tested end to end in a real browser with a fake microphone playing a 1-minute meeting:
@@ -573,6 +573,33 @@ A second browser run checks the interface: theme switch, dialogs, dashboard char
 progress steps, tabs, transcript search, mini player, chat drawer, tasks board, Ask page, the member view and
 phone layouts without sideways scrolling.
 
+### Measuring AI quality (evals)
+
+Tests check the code. **Evals check the AI**: models change, get retired, or a prompt tweak fixes one meeting and
+breaks another. MeetMind has an "exam with an answer key":
+
+| Part | What it is |
+|---|---|
+| **Golden set** (`backend/evals/data`) | 5 meetings (transcript, notes, slides) with the correct tasks, owners, dates, priorities, decisions, questions from the room and summary facts, including traps: a misheard name ("Mya"), ASAP, a decision changed by a question, a task only in a note, a parked idea that must **not** become a task, numbers only on a slide. Plus 10 questions with the right answer and source, two of them unanswerable. |
+| **Scorers** (`evals/scoring.py`) | Code checks for everything exact (tasks found / invented, owner, date, priority, decisions, answer facts, right source). An **AI judge** (a different, larger model) checks that answers are supported by their sources. |
+| **Runner** (`evals/run.py`) | Runs the **real** pipeline, models, RAG and agent on a throwaway database (only Whisper is skipped: golden transcripts). Prints a scorecard, saves a JSON report, exits with an error below `evals/thresholds.json`. |
+| **LangSmith** | `--langsmith` uploads the golden set as datasets and each run as an **experiment**, so runs (models, prompts, `top_k`, rerank on/off) can be compared side by side. |
+
+```bash
+docker compose exec worker python -m evals.run               # scorecard (~4-6 min, real API calls)
+docker compose exec worker python -m evals.run --langsmith   # + LangSmith experiment
+docker compose exec worker python -m evals.run --suite meetings --only launch-sync
+```
+
+**First results** (NVIDIA Nemotron for analysis and chat, Groq/Ollama as fallback): meetings **100 %** on all ten
+metrics; questions: answers correct **100 %**, grounded **100 %**, "not found" for unanswerable questions **100 %**,
+right source **83-100 %**. The run also showed a real difference: when NVIDIA briefly failed (502) and Groq answered,
+the answer was right but cited no source. That is exactly the kind of thing evals are for.
+
+**CI (GitHub Actions):** `tests.yml` runs the backend tests (in the same Docker image) and a frontend syntax check on
+every push and pull request. `evals.yml` runs the evaluation nightly and on demand (Actions → evals → Run workflow);
+add `GROQ_API_KEY`, `NVIDIA_API_KEY` and optionally `LANGSMITH_API_KEY` as repository **secrets** (never in code).
+
 ---
 
 ## 17. Useful commands
@@ -583,6 +610,7 @@ docker compose logs -f api worker scheduler                 # logs (pipeline and
 docker compose up -d --build api worker scheduler           # rebuild after backend changes
 docker compose up -d --force-recreate api worker scheduler  # reload .env
 docker compose exec worker python -m meetmind.jobs reindex  # rebuild the search index
+docker compose exec worker python -m evals.run --langsmith  # measure AI quality (scorecard + LangSmith experiment)
 docker compose exec postgres psql -U meetmind               # database shell
 docker compose down                                         # stop (data kept)
 docker compose down -v                                      # stop AND delete all data
@@ -622,6 +650,7 @@ docker compose down -v                                      # stop AND delete al
 | **6.5 Live meetings & agents** | Browser recording (room / online / screen), instant meetings, live notes and ⭐ moments, follow-up Q&A, priorities and ASAP, documents & bug reports, **task assistant** (plan → confirm), **multi-tool agent** with text-search fallback, LLM reranking, date filters, follow-up questions, playback from any moment, reminders, admin digest, scheduler, rescue of interrupted recordings. |
 | **6.6 Interface** | Dark mode switch, in-app dialogs and toasts, loading placeholders, meeting page tabs, real processing steps, focus recording screen with shortcuts, mini player, chat drawer, transcript search, dashboard *Needs attention* + charts, **tasks board**, chat-style Ask page. |
 | **6.7 Presentations** | *In the room + presentation* recording, 📷 snap the screen (camera, phone, `S` key), slides found in screen recordings (still periods), vision models read them (Groq → NVIDIA → Ollama), slides in the analysis, transcript, search and the agent (`search_slides`), PowerPoint decks. |
+| **8. Evals and CI** | Golden set of 5 meetings + 10 questions, code scorers + AI judge, runner with thresholds, LangSmith datasets and experiments, GitHub Actions: tests on every push, evals nightly. |
 
 ### 🔜 Next
 
@@ -629,7 +658,7 @@ docker compose down -v                                      # stop AND delete al
 |---|---|
 | **7. More agents** | **Reminder/nudge agent** (smart follow-ups, escalation to admin), **follow-up agent** (recap email to all participants), **meeting-prep agent** (agenda from open questions and unfinished tasks), a **supervisor** that routes requests, memory of company habits ("Maya handles docs"), safety model on inputs/outputs (`nemotron-3.5-content-safety`), MCP tools. |
 | **RAG next** | Multi-query rewriting, streaming answers, answers as tables, speaker-aware chunks, reading charts inside PDF/PowerPoint decks with the vision model. |
-| **8. Evals and CI** | Golden question sets scored in LangSmith (task recall, date accuracy, retrieval hit rate, faithfulness, agent tool choice); GitHub Actions on every push. |
+| **Evals next** | More golden meetings (long meetings, accents, several languages), agent tool-choice scores, 👍/👎 on answers and the share of AI tasks admins edit, as signals from real use. |
 | **Stage B: Kubernetes** | Helm, KEDA (scale workers by queue length), Grafana, **Neo4j** knowledge graph of people, decisions and tasks. |
 | **Stage C: GPU and Ray** | KubeRay / Ray Serve: faster-whisper, **pyannote speaker diarization** ("who said what"), vLLM, switchable by configuration. |
 

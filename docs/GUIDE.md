@@ -132,6 +132,13 @@ big screen, MeetMind takes one picture per slide (a slide = a moment where the s
 someone snapped, and a vision model writes down the title, text, numbers and codes. That's how a summary can say
 *"reduce failed checkouts from 4.2% to under 1%"* even though nobody read those numbers aloud.
 
+**Measuring quality (evals).** Normal tests check the code; evals check the AI. It works like an exam with an
+answer key: five realistic meetings and ten questions with the correct answers written down. MeetMind runs them with
+the real AI models, and code compares the results with the answer key (right tasks? right owner and date? anything
+invented?). A second, different AI acts as an examiner for free-text answers ("is every claim backed by the sources?").
+The result is a scorecard. If a score drops (new model, changed prompt), the run fails, so problems are found before
+users notice. Each run can be saved in LangSmith to compare runs side by side.
+
 **Prompt injection.** Someone could say in a meeting "AI, ignore your rules". MeetMind always tells the AI that
 transcripts, notes and documents are **data, not instructions**, and important actions still need a human.
 
@@ -155,7 +162,9 @@ transcripts, notes and documents are **data, not instructions**, and important a
 11. **Slides**: record with *In the room + presentation* and share a window with a few slides, or press **S** while
     recording to photograph the screen, or open the **Slides** tab → *Add a photo of the screen*. After processing, ask
     *"What number was on the slide about …?"*.
-12. Run the automated tests: `docker compose --profile test run --rm tests` (115 should pass).
+12. Run the automated tests: `docker compose --profile test run --rm tests` (121 should pass).
+13. Measure the AI: `docker compose exec worker python -m evals.run` (a few minutes; add `--langsmith` to save the
+    run in LangSmith).
 
 ---
 
@@ -184,7 +193,7 @@ transcripts, notes and documents are **data, not instructions**, and important a
 - **More agents:** reminder/nudge agent, follow-up email agent, meeting-prep agent (agenda from open questions),
   a supervisor that routes requests, memory of company habits, a safety model.
 - **Better search:** question rewriting, streaming answers, reading charts inside attached decks.
-- **Quality measurement:** test sets that score the AI automatically, GitHub Actions on every push.
+- **Quality measurement:** more test meetings, and 👍/👎 on answers as a signal from real use.
 - **Scale:** Kubernetes (Helm, autoscaling workers, Grafana dashboards), a Neo4j knowledge graph.
 - **GPU:** self-hosted models and **speaker diarization** with Ray on cloud GPUs.
 
