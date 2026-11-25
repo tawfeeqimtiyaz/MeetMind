@@ -85,9 +85,11 @@ def create_meeting(data: MeetingIn, admin: AdminUser, db: DbSession):
 
 
 @router.get("/{meeting_id}")
-def get_meeting(meeting_id: uuid.UUID, user: CurrentUser, db: DbSession):
+def get_meeting(meeting_id: uuid.UUID, user: CurrentUser, db: DbSession, settings: SettingsDep):
+    from .slides import slide_token
+
     meeting = get_meeting_for(db, user, meeting_id)
-    return {"meeting": meeting_out(meeting, _tasks_visible_to(user, meeting))}
+    return {"meeting": meeting_out(meeting, _tasks_visible_to(user, meeting), slide_token(settings, user, meeting.id))}
 
 
 @router.patch("/{meeting_id}")

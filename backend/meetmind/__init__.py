@@ -21,7 +21,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
 
     from . import models  # noqa: F401  (register tables on Base.metadata)
-    from .api import assistant, auth, dashboard, documents, health, live, meetings, notes, search, tasks, users
+    from .api import assistant, auth, dashboard, documents, health, live, meetings, notes, search, slides, tasks, users
     from .db import make_engine, make_session_factory
     from .errors import register_error_handlers
     from .ratelimit import RateLimiter, rate_limit
@@ -73,6 +73,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(live.router, prefix="/api", tags=["recording"], dependencies=default_limit)
     app.include_router(notes.router, prefix="/api", tags=["notes"], dependencies=default_limit)
     app.include_router(documents.router, prefix="/api", tags=["documents"], dependencies=default_limit)
+    app.include_router(slides.router, prefix="/api", tags=["slides"], dependencies=default_limit)
     app.include_router(assistant.router, prefix="/api", tags=["assistant"], dependencies=default_limit)
 
     return app

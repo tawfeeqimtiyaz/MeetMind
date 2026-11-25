@@ -62,6 +62,23 @@ def process_document(document_id: str) -> None:
                 retry=Retry(max=5, interval=[30, 120, 600, 1800, 3600]))
 
 
+def process_slide(slide_id: str) -> None:
+    """A photo of the big screen: shrink it, let a vision model read it, then refresh the meeting's search."""
+    import uuid
+
+    from .models import Slide
+    from .slides import process_photo
+
+    deps = _deps()
+    status = process_photo(deps.session_factory, deps.settings, deps.read_image, slide_id)
+    log.info("Slide %s: %s", slide_id, status)
+    if status == "ready":
+        with deps.session_factory() as db:
+            slide = db.get(Slide, uuid.UUID(slide_id))
+            if slide is not None:
+                deps.rag().index_meeting(slide.meeting)
+
+
 def index_document(document_id: str) -> None:
     import uuid
 
