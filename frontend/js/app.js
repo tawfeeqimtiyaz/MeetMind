@@ -45,12 +45,29 @@
     return append(el, children);
   }
 
-  function empty(text, sub) {
-    return h("div", { class: "empty-state" }, h("p", { class: "empty-title" }, text), sub ? h("p", { class: "muted small" }, sub) : null);
+  // empty("No meetings yet.", "Create one…", {icon: "i-calendar", action: {label, href | onclick}})
+  function empty(text, sub, opts) {
+    const o = opts || {};
+    const action = o.action
+      ? (o.action.href ? h("a", { class: "btn btn-secondary btn-sm", href: o.action.href }, o.action.label)
+        : h("button", { class: "btn btn-secondary btn-sm", type: "button", onclick: o.action.onclick }, o.action.label))
+      : null;
+    return h("div", { class: "empty-state" },
+      o.icon ? icon(o.icon, "empty-icon") : null,
+      h("p", { class: "empty-title" }, text), sub ? h("p", { class: "muted small" }, sub) : null, action);
   }
 
   function loading(text) {
     return h("div", { class: "loading", role: "status" }, h("span", { class: "spinner", "aria-hidden": "true" }), text || "Loading…");
+  }
+
+  // Grey placeholder rows while a list loads (feels faster than a spinner)
+  function skeleton(rows) {
+    const widths = ["62%", "48%", "70%", "55%", "40%"];
+    return h("div", { class: "skeleton", role: "status", "aria-label": "Loading" },
+      Array.from({ length: rows || 3 }, (_, i) => h("div", { class: "skeleton-row" },
+        h("div", { class: "skeleton-line is-title", style: "--w:" + widths[i % widths.length] }),
+        h("div", { class: "skeleton-line", style: "--w:" + widths[(i + 2) % widths.length] }))));
   }
 
   // Minimal, safe Markdown for AI answers: paragraphs, "- " / "1. " lists, **bold**, `code`.
@@ -181,6 +198,43 @@
     replace(container, h("div", { class: "alert alert-error", role: "alert" }, err.message || "Something went wrong."));
   }
 
+  /* ---------- "recording in another tab" banner ---------- */
+  // The meeting page that is recording writes a heartbeat to localStorage every few seconds.
+  // Every other signed-in tab shows a banner, so nobody forgets a meeting is being recorded.
+  const LIVE_KEY = "meetmind.live";
+
+  function readLive() {
+    try {
+      const live = JSON.parse(localStorage.getItem(LIVE_KEY) || "null");
+      return live && Date.now() - live.at < 20000 ? live : null; // stale heartbeat: that tab is gone
+    } catch (e) { return null; }
+  }
+
+  function renderLiveBanner() {
+    const host = document.querySelector(".app .main-inner");
+    if (!host) return;
+    let banner = document.getElementById("live-banner");
+    const live = M.recordingHere ? null : readLive();
+    if (!live) { if (banner) banner.remove(); return; }
+    if (!banner) {
+      banner = h("div", { class: "live-banner", id: "live-banner", role: "status" });
+      host.prepend(banner);
+    }
+    replace(banner, h("span", { class: "rec-dot", "aria-hidden": "true" }),
+      h("span", {}, h("strong", {}, "Recording in progress: "), live.title || "a meeting",
+        " · in another tab. Keep that tab open until you press Stop."),
+      h("a", { href: "meeting.html?id=" + encodeURIComponent(live.id) }, "View meeting"));
+  }
+
+  M.liveHeartbeat = function (meetingId, title) {
+    try { localStorage.setItem(LIVE_KEY, JSON.stringify({ id: meetingId, title, at: Date.now() })); } catch (e) { /* ignore */ }
+  };
+  M.liveClear = function () {
+    try { localStorage.removeItem(LIVE_KEY); } catch (e) { /* ignore */ }
+  };
+  window.addEventListener("storage", (e) => { if (e.key === LIVE_KEY) renderLiveBanner(); });
+  document.addEventListener("DOMContentLoaded", () => { renderLiveBanner(); setInterval(renderLiveBanner, 10000); });
+
   // Every form on the signed-in pages is handled by JavaScript. Never let one submit natively,
   // e.g. when Enter is pressed before the page script has finished loading (that would reload the page).
   document.addEventListener("submit", (e) => {
@@ -188,7 +242,7 @@
   });
 
   Object.assign(M, {
-    h, append, replace, icon, empty, loading, badge, markdownLite,
+    h, append, replace, icon, empty, loading, skeleton, badge, markdownLite,
     formatDateTime, formatDate, isOverdue, initials, personName, plural,
     requireUser, showPageError,
   });
