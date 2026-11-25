@@ -8,6 +8,9 @@ uploads/
 *.db
 *.sqlite3
 
+# Evaluation reports (kept as CI artifacts / LangSmith experiments, not in git)
+backend/evals/results/
+
 # Python
 __pycache__/
 *.py[cod]
