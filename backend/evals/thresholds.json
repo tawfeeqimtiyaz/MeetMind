@@ -1,0 +1,15 @@
+{
+  "task_recall": 0.85,
+  "task_precision": 0.7,
+  "owner_accuracy": 0.9,
+  "due_date_accuracy": 0.85,
+  "priority_accuracy": 0.8,
+  "no_invented_tasks": 0.8,
+  "decision_recall": 0.75,
+  "followup_recall": 0.75,
+  "summary_facts": 0.8,
+  "answer_correct": 0.8,
+  "source_hit": 0.75,
+  "says_when_unknown": 0.5,
+  "grounded": 0.8
+}
