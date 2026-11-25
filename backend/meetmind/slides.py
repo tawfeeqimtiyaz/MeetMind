@@ -32,9 +32,28 @@ def slide_folder(meeting: Meeting) -> Path:
     return Path(str(meeting.organization_id)) / str(meeting.id) / "slides"
 
 
+def _ask_model(read_image: ReadImage, path: Path):
+    """The slow part (a network call to the vision model). Touches no database, so it can run in threads.
+    Returns (reading, model) or the exception."""
+    try:
+        return read_image(path.read_bytes())
+    except Exception as exc:  # noqa: BLE001 - one unreadable slide must not stop the others
+        return exc
+
+
 def read_slide(session_factory, settings: Settings, read_image: ReadImage, slide_id: str) -> str:
     """Read one slide with the vision model. Returns the new status: ready | failed | empty | missing.
     'empty' = a screen frame with nothing on it (desktop, black screen): it is deleted."""
+    with session_factory() as db:
+        slide = db.get(Slide, uuid.UUID(slide_id))
+        if slide is None:
+            return "missing"
+        path = Path(settings.upload_dir) / slide.storage_path
+    return save_reading(session_factory, settings, slide_id, _ask_model(read_image, path))
+
+
+def save_reading(session_factory, settings: Settings, slide_id: str, result) -> str:
+    """Store what the model read (or why it failed). Database work only: always called one slide at a time."""
     from .ai.llm import AIUnavailableError
 
     with session_factory() as db:
@@ -42,17 +61,17 @@ def read_slide(session_factory, settings: Settings, read_image: ReadImage, slide
         if slide is None:
             return "missing"
         path = Path(settings.upload_dir) / slide.storage_path
-        try:
-            reading, model = read_image(path.read_bytes())
-        except Exception as exc:  # noqa: BLE001 - one unreadable slide must not stop the others
+        if isinstance(result, Exception):
+            exc = result
             if not isinstance(exc, AIUnavailableError):
-                log.warning("Could not read slide %s", slide_id, exc_info=True)
+                log.warning("Could not read slide %s: %s: %s", slide_id, type(exc).__name__, exc)
             slide.status = "failed"
             slide.error = (str(exc) if isinstance(exc, AIUnavailableError)
                            else "The image file is missing." if isinstance(exc, OSError)
                            else "Could not read this slide right now.")
             db.commit()
             return "failed"
+        reading, model = result
         if not reading.has_content:
             if slide.source == "screen":
                 db.delete(slide)
@@ -130,7 +149,7 @@ def extract_screen_slides(session_factory, settings: Settings, read_image: ReadI
             times = media.pick_slide_times(changes, duration, settings.slide_min_gap_seconds,
                                            settings.max_slides_per_recording)
             how = f"{len(changes)} picture change(s)"
-        ids = []
+        ids, paths = [], []
         for at in times:
             rel = folder / f"{uuid.uuid4()}.jpg"
             if not media.grab_frame(video, at, Path(settings.upload_dir) / rel):
@@ -140,12 +159,16 @@ def extract_screen_slides(session_factory, settings: Settings, read_image: ReadI
             db.add(slide)
             db.flush()
             ids.append(str(slide.id))
+            paths.append(Path(settings.upload_dir) / rel)
         db.commit()
     log.info("Recording %s: %s, %d still(s) to read", recording_id, how, len(ids))
 
-    # read a few at a time: each call waits on the network, not the CPU
+    # Ask the model about a few slides at a time (each call waits on the network, not the CPU), but save the
+    # results one by one here: database sessions are never shared between threads.
     with ThreadPoolExecutor(max_workers=4) as pool:
-        list(pool.map(lambda sid: read_slide(session_factory, settings, read_image, sid), ids))
+        results = list(pool.map(lambda p: _ask_model(read_image, p), paths))
+    for slide_id, result in zip(ids, results):
+        save_reading(session_factory, settings, slide_id, result)
     return drop_repeats(session_factory, settings, recording_id)
 
 

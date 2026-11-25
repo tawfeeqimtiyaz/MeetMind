@@ -180,9 +180,10 @@ def presentation(app, client, invites, enqueued, tmp_path):
 def test_screen_recording_slides_reach_analysis_and_search(app, client, presentation):
     contexts, stages = [], []
     reader = fake_reader()  # distinct text per slide
+    one_at_a_time = threading.Lock()  # the model is called from threads; the test DB has one shared connection
 
     def stage():
-        with app.state.session_factory() as db:
+        with one_at_a_time, app.state.session_factory() as db:
             return db.get(Recording, uuid.UUID(presentation["recording_id"])).stage
 
     def read(image):
