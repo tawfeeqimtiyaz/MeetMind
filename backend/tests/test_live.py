@@ -118,9 +118,22 @@ def test_notes_by_participants_reach_the_ai(app, client, invites, enqueued):
     run_pipeline(make_deps(app, analysis=analysis, calls=calls), upload(client, admin, m["id"]))
     ctx = calls[1][1]
     assert "[00:00:42] Maya noted: Maya will also send the release notes" in ctx.notes
-    assert any("MOMENT MARKED IMPORTANT" in n for n in ctx.notes)
+    assert any("STARRED by" in n for n in ctx.notes)
     titles = [t["title"] for t in client.get(f"/api/meetings/{m['id']}/tasks", headers=auth(admin)).json()["items"]]
     assert "Send the release notes" in titles
+
+
+def test_summary_never_talks_about_star_markers():
+    from meetmind.ai.pipeline import clean_summary
+
+    assert clean_summary("The team discussed the mobile beta release plan, a moment marked important, originally "
+                         "targeting December 15th.") == \
+        "The team discussed the mobile beta release plan, originally targeting December 15th."
+    assert clean_summary("Two moments were marked as important. The launch moved to Dec 22.") == "The launch moved to Dec 22."
+    assert clean_summary("Pricing was agreed. One moment was flagged as important.") == "Pricing was agreed."
+    # ordinary sentences are untouched
+    text = "Maya marked the bug as important and will fix it. In a moment of clarity, Alex agreed."
+    assert clean_summary(text) == text
 
 
 def test_note_permissions(client, invites):
