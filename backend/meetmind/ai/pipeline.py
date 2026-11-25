@@ -120,15 +120,17 @@ def build_graph(deps: PipelineDeps, checkpointer):
             if rec is None:
                 raise PipelineError("The recording was deleted before it could be processed.")
             meeting = rec.meeting
-            rec.status, rec.error = "processing", None
-            meeting.status = "processing"
-            db.commit()
             audio_path = Path(deps.settings.upload_dir) / rec.storage_path
             pieces = Path(deps.settings.upload_dir) / Path(rec.storage_path).parent / f"live-{rec.id}"
+            rec.status, rec.error = "processing", None
+            rec.stage = "preparing" if pieces.exists() else "transcribing"
+            meeting.status = "processing"
+            db.commit()
             if pieces.exists():  # recorded in the browser: join the pieces into one file first
                 from ..media import assemble_pieces
 
                 rec.size_bytes = assemble_pieces(pieces, audio_path)
+                rec.stage = "transcribing"
                 db.commit()
             hint, meeting_id = _whisper_hint(meeting), str(meeting.id)
 
@@ -148,6 +150,10 @@ def build_graph(deps: PipelineDeps, checkpointer):
 
     def analyze(state: PipelineState) -> PipelineState:
         with sf() as db:
+            rec = db.get(Recording, uuid.UUID(state["recording_id"]))
+            if rec is not None:
+                rec.stage = "analysing"
+                db.commit()
             meeting = db.get(Meeting, uuid.UUID(state["meeting_id"]))
             ctx = MeetingContext(
                 title=meeting.title,
@@ -211,7 +217,7 @@ def build_graph(deps: PipelineDeps, checkpointer):
 
             rec = db.get(Recording, uuid.UUID(state["recording_id"]))
             if rec is not None:
-                rec.status = "done"
+                rec.status, rec.stage = "done", None
             meeting.status = "review" if drafts else "completed"
             meeting.ai_thread_id = config["configurable"]["thread_id"] if drafts else None
             db.commit()
@@ -314,7 +320,7 @@ def mark_failed(deps: PipelineDeps, recording_id: str, message: str) -> None:
         rec = db.get(Recording, uuid.UUID(recording_id))
         if rec is None:
             return
-        rec.status, rec.error = "failed", message
+        rec.status, rec.error, rec.stage = "failed", message, None
         rec.meeting.status = "failed"
         db.commit()
         notifications.notify_processing_failed(deps.settings, db, rec.meeting, message)
