@@ -1,0 +1,50 @@
+# Measures the AI's quality on the golden set with the REAL models (costs a few API calls), records the
+# run as a LangSmith experiment and fails if a score drops below backend/evals/thresholds.json.
+# Runs every night and on demand (Actions tab -> evals -> Run workflow).
+# Needs repository secrets: GROQ_API_KEY, NVIDIA_API_KEY and (optional) LANGSMITH_API_KEY.
+name: evals
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "30 1 * * *"   # 01:30 UTC every day
+
+jobs:
+  evals:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+      NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
+      LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
+      LANGSMITH_TRACING: ${{ secrets.LANGSMITH_API_KEY != '' }}
+      LANGSMITH_PROJECT: MeetMind_project
+      HAS_KEYS: ${{ secrets.GROQ_API_KEY != '' || secrets.NVIDIA_API_KEY != '' }}
+    steps:
+      - name: Skip when no AI keys are configured
+        if: env.HAS_KEYS != 'true'
+        run: echo "::notice::Add GROQ_API_KEY / NVIDIA_API_KEY as repository secrets to run the evaluation."
+      - uses: actions/checkout@v4
+        if: env.HAS_KEYS == 'true'
+      - uses: actions/setup-python@v5
+        if: env.HAS_KEYS == 'true'
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - name: Install
+        if: env.HAS_KEYS == 'true'
+        run: |
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+          pip install -r backend/requirements.txt
+      - name: Evaluate
+        if: env.HAS_KEYS == 'true'
+        working-directory: backend
+        run: python -m evals.run ${{ env.LANGSMITH_API_KEY != '' && '--langsmith' || '' }}
+      - name: Keep the report
+        if: always() && env.HAS_KEYS == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-report
+          path: backend/evals/results/latest.json
+          if-no-files-found: ignore
