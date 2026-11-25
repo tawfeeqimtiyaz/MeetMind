@@ -147,7 +147,8 @@ def test_dashboard_stats(client, invites):
     s = client.get("/api/dashboard", headers=auth(member)).json()
     from datetime import datetime, timezone
     upcoming = 1 if datetime.now(timezone.utc) < datetime(2026, 12, 1, 10, tzinfo=timezone.utc) else 0
-    assert s == {"role": "member", "stats": {"open_tasks": 1, "due_this_week": 1, "upcoming_meetings": upcoming}}
+    assert s["role"] == "member"
+    assert s["stats"] == {"open_tasks": 1, "due_this_week": 1, "upcoming_meetings": upcoming}
 
     item = client.get("/api/meetings", headers=auth(admin)).json()["items"][0]
     assert item["draft_task_count"] == 0 and item["participant_count"] == 1
