@@ -24,9 +24,9 @@ jobs:
       - name: Skip when no AI keys are configured
         if: env.HAS_KEYS != 'true'
         run: echo "::notice::Add GROQ_API_KEY / NVIDIA_API_KEY as repository secrets to run the evaluation."
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         if: env.HAS_KEYS == 'true'
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         if: env.HAS_KEYS == 'true'
         with:
           python-version: "3.11"
