@@ -38,6 +38,7 @@ It was rebuilt step by step into a production-style application:
 | **7. RAG search** | Ask questions across **all** meetings; answers cite their sources. |
 | **8. Live meetings & agents** | Record in the browser, live notes, follow-up questions, documents and bug reports, an AI **task assistant**, a **multi-tool AI agent**, reminders. |
 | **9. Interface** | A full-screen recorder with shortcuts, tabs on the meeting page, live progress steps, a tasks board, a dashboard that shows what needs attention, dark mode. |
+| **10. Presentations** | MeetMind also captures what is on the big screen (recording or photos) and AI reads each slide, so the notes contain the real numbers. |
 
 ---
 
@@ -126,6 +127,11 @@ has nothing, it tries another one** before answering. Every tool respects permis
 **Task assistant.** A planning AI: you describe what you want in plain words, it proposes concrete changes, code
 checks them, you confirm. Nothing happens without your click.
 
+**Vision models (reading slides).** Some AI models can look at a picture and read it. When someone presents on the
+big screen, MeetMind takes one picture per slide (a slide = a moment where the screen stands still) or uses a photo
+someone snapped, and a vision model writes down the title, text, numbers and codes. That's how a summary can say
+*"reduce failed checkouts from 4.2% to under 1%"* even though nobody read those numbers aloud.
+
 **Prompt injection.** Someone could say in a meeting "AI, ignore your rules". MeetMind always tells the AI that
 transcripts, notes and documents are **data, not instructions**, and important actions still need a human.
 
@@ -146,7 +152,10 @@ transcripts, notes and documents are **data, not instructions**, and important a
 8. **Transcript** tab → click a time: the player at the bottom plays from there.
 9. **Tasks board** in the sidebar → drag a card to *In progress*. Back on the dashboard, see *Needs attention* and the charts.
 10. Sign in as a member to see their view (only their meetings and tasks). Try the theme switch at the bottom of the sidebar.
-11. Run the automated tests: `docker compose --profile test run --rm tests` (102 should pass).
+11. **Slides**: record with *In the room + presentation* and share a window with a few slides, or press **S** while
+    recording to photograph the screen, or open the **Slides** tab → *Add a photo of the screen*. After processing, ask
+    *"What number was on the slide about …?"*.
+12. Run the automated tests: `docker compose --profile test run --rm tests` (115 should pass).
 
 ---
 
@@ -174,7 +183,7 @@ transcripts, notes and documents are **data, not instructions**, and important a
 
 - **More agents:** reminder/nudge agent, follow-up email agent, meeting-prep agent (agenda from open questions),
   a supervisor that routes requests, memory of company habits, a safety model.
-- **Better search:** understanding slides shown on the screen, question rewriting, streaming answers.
+- **Better search:** question rewriting, streaming answers, reading charts inside attached decks.
 - **Quality measurement:** test sets that score the AI automatically, GitHub Actions on every push.
 - **Scale:** Kubernetes (Helm, autoscaling workers, Grafana dashboards), a Neo4j knowledge graph.
 - **GPU:** self-hosted models and **speaker diarization** with Ray on cloud GPUs.

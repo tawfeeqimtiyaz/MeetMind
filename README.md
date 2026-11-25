@@ -14,7 +14,7 @@ questions and answers, and tasks with owners and deadlines. Ask it anything afte
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)
 ![Redis](https://img.shields.io/badge/Redis-7-DC382D?logo=redis&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-102%20passing-success)
+![Tests](https://img.shields.io/badge/tests-115%20passing-success)
 
 📘 **New here? Read the easy guide first: [docs/GUIDE.md](docs/GUIDE.md)**
 
@@ -53,6 +53,7 @@ questions and answers, and tasks with owners and deadlines. Ask it anything afte
 | 🔴 **Record in the browser** | Press *Record* during the meeting. **In the room** (laptop or conference microphone), **online** (sound of Zoom/Teams/Meet + your mic) or **online + screen** (video). Saved piece by piece while recording, so a dropped network or closed laptop loses almost nothing. |
 | 🎯 **Focus recording screen** | Full-screen recorder: big timer, live sound wave, notes box, keyboard shortcuts (**Space** pause, **M** mark, **N** note, **Esc** minimise). Other tabs show a "recording in progress" banner. |
 | ⚡ **Instant meetings** | *Record a meeting now* creates a meeting that starts immediately. |
+| 🖥️ **Presentations on the big screen** | Record the room **+ the presentation screen**, or 📷 snap the screen with a camera or phone. AI reads every slide (titles, numbers, codes, charts), so summaries say *"from 4.2% to under 1%"*, not *"this number"*. PowerPoint decks can be attached. |
 | 📝 **Live notes** | Anyone in the meeting can type notes or press ⭐ *Mark this moment*. Notes are time-stamped and given to the AI with the recording. |
 | ⬆️ **Upload** | Or upload MP3, WAV, M4A, MP4, WEBM, OGG, FLAC, MOV (up to 500 MB). |
 | 🎙️ **Transcription** | A timestamped transcript. Click any line to play the recording from there. |
@@ -152,6 +153,7 @@ Model names live in `.env`, so you can swap them without touching code.
 | Meeting analysis | `nvidia/nemotron-3.5-super-vl-120b-a12b` | `openai/gpt-oss-120b` (Groq) → `gemma4` (Ollama, optional) |
 | Q&A, agent, task assistant | `nvidia/nemotron-3.5-lightning-30b-a3b` | `openai/gpt-oss-20b` (Groq) → `gemma4` (Ollama) |
 | Reranking search results | `openai/gpt-oss-20b` (Groq, fastest) | NVIDIA chat model; off if neither |
+| Reading slides (vision) | `qwen/qwen3.8-27b` (Groq, ~1 s per slide) | `nemotron-3.5-super-vl` (NVIDIA, 10–30 s) → `gemma4` (Ollama, ~1 min on CPU) |
 | Embeddings (RAG) | `nvidia/nemotron-3.5-embed-1b` | *or* `embeddinggemma` via Ollama: **one at a time** (see below) |
 
 **Fallback:** for answers, MeetMind tries each configured provider in order and records which model answered.
@@ -170,6 +172,7 @@ On a meeting page (or **Record a meeting now** on the dashboard), choose where t
 | Mode | Use it for | What is recorded |
 |---|---|---|
 | **In the room** | Conference room / meeting hall | The microphone. **Noise suppression is off by default**, so quieter voices and questions from the audience are kept; automatic gain lifts distant speakers. |
+| **In the room + presentation** | Hall or conference room with a big screen / projector | The room microphone **+ the screen shown on the big screen** as low-frame-rate video (5 fps, ~300 MB per hour). Every slide is captured and read by AI. |
 | **Online meeting** | Zoom, Teams, Meet on the same computer | The meeting's sound (share the tab with *Share tab audio*, or the screen with *Share system audio*) **+ your microphone**, mixed. |
 | **Online + screen** | Presentations, demos | The above + the screen as video. |
 
@@ -182,6 +185,7 @@ or use an external mic"), **Pause/Resume**, **⭐ Mark this moment**, a notes bo
 | `Space` | Pause / resume |
 | `M` | Mark this moment ⭐ |
 | `N` | Write a note |
+| `S` | 📷 Snap the big screen (camera photo, saved at this moment of the recording) |
 | `Esc` | Minimise (a red bar with the timer and *Stop* stays at the top of the page) |
 
 After *Stop*, the meeting page shows the real progress: **Recorded → Preparing audio → Transcribing → Analysing → Ready**.
@@ -202,6 +206,35 @@ flowchart LR
 - Tab closed or laptop died? Pieces in the browser are uploaded next time the page opens; anything the server already
   has is processed automatically by the hourly **rescue** job.
 - The screen stays awake during recording; closing the tab asks for confirmation.
+
+### Presentations on the big screen
+
+In a hall, people explain what is on the LED wall or projector: *"as you can see, this number is far too high"*.
+The audio alone doesn't say which number. MeetMind captures the screen too:
+
+| Way in | When to use it |
+|---|---|
+| **In the room + presentation** mode | The laptop running MeetMind is the one connected to the big screen. |
+| **📷 Snap screen** (or key `S`) | Another computer drives the screen: photograph it with the laptop or phone camera. Anyone in the meeting can also add a photo from their phone (Slides tab). |
+| **Attach the deck** | The presenter has the file: PDF or **PowerPoint (`.pptx`)** under Documents (text, tables and speaker notes per slide). |
+
+```mermaid
+flowchart LR
+    V[Screen recording] --> F[ffmpeg: find periods where<br/>the screen stands still = slides]
+    F --> S[One still per slide]
+    P[📷 Photos of the screen] --> R
+    S --> R[Vision model reads each slide<br/>title, text, numbers, codes, chart values]
+    R --> D[Repeats dropped<br/>same words AND same numbers]
+    D --> A[AI analysis: SLIDES section<br/>numbers make decisions and tasks concrete]
+    D --> I[Search index: kind = slide<br/>+ agent tool search_slides]
+```
+
+- A slide is found as a period where the screen **stands still** (≥ 2 s). This works even when every slide uses the
+  same template: there the "picture change" score is tiny (about 0.05), so change detection alone missed slides.
+- A slide is **never** a decision or task by itself; tasks still need a quote of what people said or typed.
+- Slides appear on the **Slides** tab (image, time, what AI read), as markers in the transcript, and as sources in answers
+  (*"🖼 Slide shown at 00:00:16"* with a link to it). Slide reading never blocks processing: if it fails, the meeting is
+  still processed.
 
 **Browser support:** recording the microphone works in all modern browsers. Capturing another app's sound needs
 **Chrome or Edge** on a computer (tab audio everywhere; whole-system audio on Windows). In production, MeetMind must be
@@ -363,25 +396,27 @@ MeetMind/
 │   ├── meetmind/
 │   │   ├── __init__.py         # FastAPI app factory
 │   │   ├── config.py, models.py, schemas.py, serializers.py, deps.py, security.py, ratelimit.py
-│   │   ├── media.py            # joins browser recording pieces (ffmpeg)
-│   │   ├── documents.py        # reads PDF/Word/text documents
+│   │   ├── media.py            # joins browser recording pieces; finds slides in screen recordings (ffmpeg)
+│   │   ├── slides.py           # slide stills and photos: read, drop repeats, lines for the AI
+│   │   ├── documents.py        # reads PDF/Word/PowerPoint/text documents
 │   │   ├── reminders.py        # task reminders, admin digest, rescue of interrupted recordings
 │   │   ├── scheduler.py        # queues daily/hourly jobs
 │   │   ├── mailer.py, notifications.py, templates/email/
 │   │   ├── jobs.py             # everything the worker runs
-│   │   ├── api/                # auth, users, meetings, live (recording), notes, documents,
+│   │   ├── api/                # auth, users, meetings, live (recording), notes, documents, slides,
 │   │   │                       # tasks, assistant, search (RAG + agent), dashboard, health
 │   │   └── ai/
 │   │       ├── llm.py          # providers + fallback (NVIDIA → Groq → Ollama)
 │   │       ├── transcription.py# ffmpeg + Groq Whisper
 │   │       ├── analysis.py     # prompt, output schema, evidence/owner/date/ASAP checks
 │   │       ├── pipeline.py     # LangGraph meeting pipeline with interrupt()
+│   │       ├── vision.py       # reads slides with a vision model (Groq → NVIDIA → Ollama)
 │   │       ├── rag.py          # chunking, embeddings, ChromaDB, hybrid search, rerank, cited answers
 │   │       ├── agents.py       # multi-tool LangGraph agent (Q&A)
 │   │       ├── task_agent.py   # task assistant: propose → check → confirm → apply
 │   │       ├── checkpoint.py   # Postgres checkpointer
 │   │       └── qa.py           # direct per-meeting answer (fallback)
-│   └── tests/                  # 102 tests (fake AI models + in-memory vector store, no keys needed)
+│   └── tests/                  # 115 tests (fake AI models + in-memory vector store, no keys needed)
 │
 └── frontend/
     ├── index.html, signup.html, login.html, accept-invite.html
@@ -449,6 +484,8 @@ docker compose ps           # all services should be Up
 | `NVIDIA_API_KEY`, `NVIDIA_ANALYSIS_MODEL`, `NVIDIA_CHAT_MODEL` | Nemotron 3.5 | NVIDIA models. |
 | `GROQ_API_KEY`, `GROQ_ANALYSIS_MODEL`, `GROQ_CHAT_MODEL`, `GROQ_TRANSCRIPTION_MODEL` | gpt-oss, whisper | Groq models. |
 | `OLLAMA_BASE_URL`, `OLLAMA_MODEL`, `OLLAMA_NUM_CTX` | off | Local backup model. |
+| `GROQ_VISION_MODEL`, `NVIDIA_VISION_MODEL`, `OLLAMA_VISION_MODEL` | Qwen, Nemotron VL, `OLLAMA_MODEL` | Models that read slides (empty = skip that one). |
+| `MAX_SLIDES_PER_RECORDING`, `SLIDE_MIN_GAP_SECONDS`, `SLIDE_SCENE_THRESHOLD`, `MAX_SLIDE_IMAGE_MB` | `60`, `4`, `0.03`, `10` | Slide capture tuning. |
 | `CHROMA_URL` | `http://chroma:8000` | Vector database. |
 | `EMBEDDING_PROVIDER` | `nvidia` | `nvidia` or `ollama` (reindex after switching). |
 | `NVIDIA_EMBEDDING_MODEL` / `OLLAMA_EMBEDDING_MODEL` | `nemotron-3.5-embed-1b` / `embeddinggemma` | Embedding models. |
@@ -479,6 +516,8 @@ Interactive docs: **<http://localhost:8080/api/docs>** (click **Authorize**, pas
 | POST | `/api/meetings/{id}/recordings` | admin | Upload a file |
 | GET/POST · DELETE | `/api/meetings/{id}/notes` · `/api/notes/{id}` | participants | Notes and ⭐ moments |
 | GET/POST · DELETE | `/api/meetings/{id}/documents` · `/api/documents/{id}` | participants | Attach / list / delete documents |
+| GET/POST · DELETE | `/api/meetings/{id}/slides` · `/api/slides/{id}` | participants | Slides; add a photo of the screen (`offset_seconds` optional) |
+| GET | `/api/slides/{id}/image?token=` | signed link | Slide image (short-lived link, like playback) |
 | GET | `/api/meetings/{id}/transcript` | signed in | Transcript |
 | GET/POST | `/api/meetings/{id}/tasks` | signed in / admin | Tasks |
 | POST | `/api/meetings/{id}/review`, `/api/meetings/{id}/reprocess` | admin | Approve drafts, retry |
@@ -515,16 +554,21 @@ Errors always look like `{"error": {"code": "…", "message": "…", "details": 
 docker compose --profile test run --rm tests
 ```
 
-**102 tests** cover auth, permissions, organization isolation, uploads, **live recording** (pieces, missing pieces,
+**115 tests** cover auth, permissions, organization isolation, uploads, **live recording** (pieces, missing pieces,
 discard, playback with seeking), **notes** reaching the AI, **follow-up Q&A**, ASAP/priority rules, the AI
 pipeline (review, fallback, evidence, owner matching incl. typos, due dates, time zones, **processing stages**),
 the **dashboard insights** and **tasks board** filters and access rules, **documents**, the **task
 assistant** (plan → confirm → emails, cancel, permissions), the **agent's tools** (access rules, text-search fallback),
-RAG (chunking, filters, hybrid search, citations), **reminders**, the **scheduler** and the **rescue** of interrupted
-recordings. They use fake AI models and an in-memory vector store: no API keys or internet needed.
+RAG (chunking, filters, hybrid search, citations), **reminders**, the **scheduler**, the **rescue** of interrupted
+recordings and **slides** (photos and their access rules, slides found in real generated videos incl. same-template
+decks, repeats dropped, slides reaching the analysis, search and the agent, PowerPoint decks). They use fake AI models
+and an in-memory vector store: no API keys or internet needed.
 
 The project was also tested end to end in a real browser with a fake microphone playing a 1-minute meeting:
 record live → notes and ⭐ → AI results (with follow-up Q&A and a changed decision) → task assistant → document Q&A → playback.
+A presentation run with the real models: a 45-second talk with three same-template slides → all three slides captured and
+read → the summary says *"reduce failed checkouts from 4.2 percent to under 1 percent"* (numbers only on the slides) →
+the chat and Ask MeetMind answer from the slides → a phone photo of the screen and 📷 Snap screen (`S`) during recording.
 A second browser run checks the interface: theme switch, dialogs, dashboard charts, focus recorder and its shortcuts,
 progress steps, tabs, transcript search, mini player, chat drawer, tasks board, Ask page, the member view and
 phone layouts without sideways scrolling.
@@ -577,13 +621,14 @@ docker compose down -v                                      # stop AND delete al
 | **6. RAG with ChromaDB** | Chunking, embeddings, hybrid search, access filters, Ask MeetMind with citations. |
 | **6.5 Live meetings & agents** | Browser recording (room / online / screen), instant meetings, live notes and ⭐ moments, follow-up Q&A, priorities and ASAP, documents & bug reports, **task assistant** (plan → confirm), **multi-tool agent** with text-search fallback, LLM reranking, date filters, follow-up questions, playback from any moment, reminders, admin digest, scheduler, rescue of interrupted recordings. |
 | **6.6 Interface** | Dark mode switch, in-app dialogs and toasts, loading placeholders, meeting page tabs, real processing steps, focus recording screen with shortcuts, mini player, chat drawer, transcript search, dashboard *Needs attention* + charts, **tasks board**, chat-style Ask page. |
+| **6.7 Presentations** | *In the room + presentation* recording, 📷 snap the screen (camera, phone, `S` key), slides found in screen recordings (still periods), vision models read them (Groq → NVIDIA → Ollama), slides in the analysis, transcript, search and the agent (`search_slides`), PowerPoint decks. |
 
 ### 🔜 Next
 
 | Phase | Plan |
 |---|---|
 | **7. More agents** | **Reminder/nudge agent** (smart follow-ups, escalation to admin), **follow-up agent** (recap email to all participants), **meeting-prep agent** (agenda from open questions and unfinished tasks), a **supervisor** that routes requests, memory of company habits ("Maya handles docs"), safety model on inputs/outputs (`nemotron-3.5-content-safety`), MCP tools. |
-| **RAG next** | Slides/screen understanding (vision model reads what was shown on the LED/screen), multi-query rewriting, streaming answers, answers as tables, speaker-aware chunks. |
+| **RAG next** | Multi-query rewriting, streaming answers, answers as tables, speaker-aware chunks, reading charts inside PDF/PowerPoint decks with the vision model. |
 | **8. Evals and CI** | Golden question sets scored in LangSmith (task recall, date accuracy, retrieval hit rate, faithfulness, agent tool choice); GitHub Actions on every push. |
 | **Stage B: Kubernetes** | Helm, KEDA (scale workers by queue length), Grafana, **Neo4j** knowledge graph of people, decisions and tasks. |
 | **Stage C: GPU and Ray** | KubeRay / Ray Serve: faster-whisper, **pyannote speaker diarization** ("who said what"), vLLM, switchable by configuration. |
