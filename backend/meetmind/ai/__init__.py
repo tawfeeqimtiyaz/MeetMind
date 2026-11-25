@@ -10,6 +10,7 @@ def default_deps(settings: Settings, session_factory: sessionmaker) -> PipelineD
     from .analysis import analyze_meeting
     from .rag import get_service
     from .transcription import transcribe_with_groq
+    from .vision import read_image
 
     return PipelineDeps(
         session_factory=session_factory,
@@ -17,4 +18,5 @@ def default_deps(settings: Settings, session_factory: sessionmaker) -> PipelineD
         transcribe=lambda path, hint: transcribe_with_groq(settings, path, hint),
         analyze=lambda ctx, text: analyze_meeting(settings, ctx, text),
         rag=lambda: get_service(settings),
+        read_image=lambda image: read_image(settings, image),
     )

@@ -61,6 +61,7 @@ class PipelineDeps:
     transcribe: Callable[[Path, str | None], TranscriptionResult]
     analyze: Callable[[MeetingContext, str], tuple[LLMAnalysis, str]]
     rag: Callable[[], object] | None = None  # returns the RAGService; None disables indexing
+    read_image: Callable[[bytes], tuple] | None = None  # vision model for slides; None skips slide reading
 
 
 def meeting_local_date(meeting: Meeting) -> date:
@@ -168,7 +169,36 @@ def build_graph(deps: PipelineDeps, checkpointer):
             db.commit()
         return {"meeting_id": meeting_id}
 
+    def slides(state: PipelineState) -> PipelineState:
+        """Read what was on the screen: stills from a screen recording + photos of the big screen.
+        Slides are a bonus: a problem here never stops the meeting from being processed."""
+        if deps.read_image is None:
+            return {}
+        from .. import slides as slide_tools
+        from ..media import has_video
+
+        recording_id = state["recording_id"]
+        try:
+            with sf() as db:
+                rec = db.get(Recording, uuid.UUID(recording_id))
+                path = Path(deps.settings.upload_dir) / rec.storage_path
+                video = path.exists() and has_video(path)
+                if video:
+                    rec.stage = "reading_slides"
+                    db.commit()
+                photos = [str(s.id) for s in rec.meeting.slides if s.source == "photo" and s.status == "queued"]
+            if video:
+                kept = slide_tools.extract_screen_slides(sf, deps.settings, deps.read_image, recording_id, path)
+                log.info("Recording %s: %d slide(s) kept", recording_id, kept)
+            for slide_id in photos:  # photos snapped during the meeting that haven't been read yet
+                slide_tools.process_photo(sf, deps.settings, deps.read_image, slide_id)
+        except Exception:  # noqa: BLE001
+            log.warning("Reading slides failed for recording %s; continuing without them", recording_id, exc_info=True)
+        return {}
+
     def analyze(state: PipelineState) -> PipelineState:
+        from ..slides import slide_lines
+
         with sf() as db:
             rec = db.get(Recording, uuid.UUID(state["recording_id"]))
             if rec is not None:
@@ -181,6 +211,7 @@ def build_graph(deps: PipelineDeps, checkpointer):
                 agenda=meeting.agenda,
                 participants=_participants(meeting),
                 notes=_notes_for_ai(meeting),
+                slides=slide_lines(meeting),
             )
             text = format_transcript(meeting.transcript.segments, meeting.transcript.text)
         analysis, model = deps.analyze(ctx, text)
@@ -295,13 +326,15 @@ def build_graph(deps: PipelineDeps, checkpointer):
 
     graph = StateGraph(PipelineState)
     graph.add_node("transcribe", transcribe)
+    graph.add_node("slides", slides)
     graph.add_node("analyze", analyze)
     graph.add_node("save_draft", save_draft)
     graph.add_node("index", index)
     graph.add_node("human_review", human_review)
     graph.add_node("finalize", finalize)
     graph.add_edge(START, "transcribe")
-    graph.add_edge("transcribe", "analyze")
+    graph.add_edge("transcribe", "slides")
+    graph.add_edge("slides", "analyze")
     graph.add_edge("analyze", "save_draft")
     graph.add_edge("save_draft", "index")
     graph.add_conditional_edges("index", after_save, ["human_review", "finalize"])
