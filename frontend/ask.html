@@ -6,6 +6,7 @@
   <title>Ask MeetMind · MeetMind</title>
   <link rel="icon" href="assets/logo.svg" type="image/svg+xml">
   <link rel="stylesheet" href="css/style.css">
+  <script src="js/theme.js"></script>
 </head>
 <body>
 <a class="skip-link" href="#main">Skip to content</a>
@@ -34,6 +35,9 @@
       </a>
       <a class="nav-item" href="member.html#meetings" data-member-only hidden>
         <svg class="icon"><use href="assets/icons.svg#i-calendar"/></svg>My meetings
+      </a>
+      <a class="nav-item" href="tasks.html">
+        <svg class="icon"><use href="assets/icons.svg#i-tasks"/></svg>Tasks board
       </a>
       <a class="nav-item" href="ask.html" aria-current="page">
         <svg class="icon"><use href="assets/icons.svg#i-sparkles"/></svg>Ask MeetMind
@@ -65,31 +69,37 @@
         <div class="page-header">
           <div>
             <h1>Ask MeetMind</h1>
-            <p>Ask about any of your meetings. Answers cite the meetings and the moments they come from.</p>
+            <p>Ask about any of your meetings and attached documents. Every answer shows its sources.</p>
           </div>
+          <button class="btn btn-secondary btn-sm" type="button" id="new-chat" hidden>
+            <svg class="icon"><use href="assets/icons.svg#i-plus"/></svg>New conversation
+          </button>
         </div>
 
-        <section class="card ask-card" aria-label="Conversation">
+        <section class="card ask-shell" aria-label="Conversation">
           <div class="ask-log" id="ask-log" aria-live="polite">
             <div class="ask-empty" id="ask-empty">
               <svg class="icon"><use href="assets/icons.svg#i-sparkles"/></svg>
               <p class="empty-title">What would you like to know?</p>
-              <p class="muted small">MeetMind searches every meeting you’re part of, then answers with sources.</p>
-              <div class="chat-suggestions">
+              <p class="muted small">MeetMind searches every meeting and document you can see, then answers with sources.</p>
+              <div class="chat-suggestions" id="suggestions">
                 <button class="chip" type="button" data-suggest>What decisions did we make recently?</button>
                 <button class="chip" type="button" data-suggest>Which open questions are still unresolved?</button>
-                <button class="chip" type="button" data-suggest>What did we say about the launch date?</button>
+                <button class="chip" type="button" data-suggest>Which tasks are overdue?</button>
               </div>
             </div>
           </div>
-          <form class="chat-form ask-form" id="ask-form">
-            <label class="sr-only" for="ask-input">Your question</label>
-            <input class="input" id="ask-input" autocomplete="off" maxlength="1000"
-                   placeholder="e.g. What did we decide about pricing last month?">
-            <button class="btn btn-primary" type="submit">
-              <svg class="icon"><use href="assets/icons.svg#i-send"/></svg>Ask
-            </button>
-          </form>
+          <div class="ask-composer">
+            <form class="chat-form" id="ask-form">
+              <label class="sr-only" for="ask-input">Your question</label>
+              <textarea class="input" id="ask-input" rows="1" maxlength="1000"
+                        placeholder="e.g. What did we decide about pricing last month?"></textarea>
+              <button class="btn btn-primary" type="submit" id="ask-send">
+                <svg class="icon"><use href="assets/icons.svg#i-send"/></svg>Ask
+              </button>
+            </form>
+            <p class="help"><span><kbd>Enter</kbd> to send · <kbd>Shift</kbd> + <kbd>Enter</kbd> for a new line</span><span>Follow-up questions remember the conversation.</span></p>
+          </div>
         </section>
       </div>
     </main>
