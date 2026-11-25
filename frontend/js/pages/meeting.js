@@ -1,25 +1,26 @@
-/* Meeting page: live recording, notes, results, AI task review, task assistant, documents, playback, Q&A. */
+/* Meeting page: section tabs, live recording (focus screen), notes, results, AI task review,
+   task assistant, documents, playback (mini player), Q&A chat (column or drawer). */
 (async function () {
   "use strict";
   const M = window.MeetMind;
-  const { h, replace, icon, badge, empty, loading, formatDateTime, plural, api, toast } = M;
+  const { h, replace, icon, badge, empty, formatDateTime, plural, api, toast } = M;
   const $ = (id) => document.getElementById(id);
 
   const params = new URLSearchParams(location.search);
   const id = params.get("id");
   const justCreated = params.has("created");
   const wantsRecording = params.has("record");
-  if (justCreated || wantsRecording) history.replaceState(null, "", "meeting.html?id=" + encodeURIComponent(id));
+  if (justCreated || wantsRecording) history.replaceState(null, "", "meeting.html?id=" + encodeURIComponent(id) + location.hash);
 
   const user = await M.requireUser();
   const isAdmin = user.role === "admin";
   const loadingEl = $("loading");
 
   if (!id) {
-    replace(loadingEl, empty("No meeting selected.", "Open a meeting from your dashboard."));
+    replace(loadingEl, empty("No meeting selected.", "Open a meeting from your dashboard.", { icon: "i-calendar" }));
     return;
   }
-  replace(loadingEl, loading("Loading meeting…"));
+  replace(loadingEl, M.skeleton(4));
 
   let meeting = null;
   let pollTimer = null;
@@ -36,6 +37,63 @@
     const s = Math.floor(sec || 0);
     return `${pad(Math.floor(s / 3600))}:${pad(Math.floor((s % 3600) / 60))}:${pad(s % 60)}`;
   };
+  const recording = () => recorder && ["recording", "paused"].includes(recorder.state);
+
+  /* ================= section tabs ================= */
+
+  const TABS = ["overview", "tasks", "notes", "transcript", "documents", "recording"];
+  let currentTab = null;
+
+  function visibleTabs() { return TABS.filter((t) => !$("mtab-" + t).hidden); }
+
+  function showTab(name, opts) {
+    const o = opts || {};
+    if (!visibleTabs().includes(name)) name = "overview";
+    currentTab = name;
+    for (const t of TABS) {
+      const tab = $("mtab-" + t);
+      tab.setAttribute("aria-selected", String(t === name));
+      tab.tabIndex = t === name ? 0 : -1;
+      $("mpanel-" + t).hidden = t !== name;
+    }
+    if (o.remember) history.replaceState(null, "", location.pathname + location.search + "#" + name);
+    if (meeting && !firstRender) renderBanner();
+    if (name === "transcript" && meeting && meeting.has_transcript && !transcriptLoaded) loadTranscript();
+    if (o.focusPanel) $("mpanel-" + name).focus({ preventScroll: true });
+    if (o.scroll) $("meeting-tabs").scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  $("meeting-tabs").addEventListener("click", (e) => {
+    const tab = e.target.closest(".mtab");
+    if (tab) showTab(tab.dataset.tab, { remember: true });
+  });
+  $("meeting-tabs").addEventListener("keydown", (e) => {
+    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(e.key)) return;
+    const tabs = visibleTabs();
+    const focused = e.target.closest(".mtab");
+    let i = tabs.indexOf(focused ? focused.dataset.tab : currentTab);
+    i = e.key === "Home" ? 0 : e.key === "End" ? tabs.length - 1 : (i + (e.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
+    e.preventDefault();
+    showTab(tabs[i], { remember: true });
+    $("mtab-" + tabs[i]).focus();
+  });
+
+  function defaultTab() {
+    const fromHash = location.hash.slice(1);
+    if (TABS.includes(fromHash)) return fromHash;
+    if (wantsRecording && isAdmin) return "recording";
+    if (isAdmin && meeting.status === "review") return "tasks";
+    if (meeting.summary || meeting.has_transcript || isBusy(meeting)) return "overview";
+    if (isAdmin) return "recording";
+    return "overview";
+  }
+
+  function setCount(name, n, alert) {
+    const el = $("count-" + name);
+    el.hidden = !n;
+    el.textContent = n || "";
+    el.classList.toggle("is-alert", Boolean(alert));
+  }
 
   /* ================= loading & polling ================= */
 
@@ -46,7 +104,7 @@
     } catch (err) {
       if (err.status === 404 || err.status === 422) {
         $("meeting").hidden = true;
-        replace(loadingEl, empty("Meeting not found.", "It may have been deleted, or you don’t have access to it."));
+        replace(loadingEl, empty("Meeting not found.", "It may have been deleted, or you don’t have access to it.", { icon: "i-calendar" }));
         return;
       }
       if (!meeting) { M.showPageError(loadingEl, err); return; }
@@ -57,13 +115,13 @@
     lastStatus = meeting.status;
     render();
     const docsWaiting = meeting.documents.some((d) => d.status === "queued");
-    if (isBusy(meeting) || docsWaiting) pollTimer = setTimeout(load, 4000);
+    if (isBusy(meeting) || docsWaiting) pollTimer = setTimeout(load, 3000);
   }
 
   function announce(status) {
     transcriptLoaded = false;
-    if (status === "review") toast(isAdmin ? "AI results are ready for your review." : "The recording has been processed.");
-    else if (status === "completed") toast("Meeting notes are ready.");
+    if (status === "review") toast(isAdmin ? "AI results are ready for your review." : "The recording has been processed.", "success");
+    else if (status === "completed") toast("Meeting notes are ready.", "success");
     else if (status === "failed") toast("Processing failed. See the message at the top.", "error");
   }
 
@@ -72,6 +130,7 @@
   function render() {
     loadingEl.replaceChildren();
     $("meeting").hidden = false;
+    $("chat-fab").hidden = false;
     document.title = meeting.title + " · MeetMind";
 
     $("title").textContent = meeting.title;
@@ -85,7 +144,16 @@
     );
     $("delete-meeting").hidden = !isAdmin;
 
+    $("mtab-recording").hidden = !isAdmin;
+    $("tab-rec-dot").hidden = !meeting.recordings.some((r) => r.status === "recording");
+    const drafts = meeting.tasks.filter((t) => !t.approved).length;
+    setCount("tasks", meeting.tasks.length, isAdmin && meeting.status === "review" && drafts);
+    setCount("notes", meeting.notes.length);
+    setCount("documents", meeting.documents.length);
+    if (firstRender) showTab(defaultTab());
+
     renderBanner();
+    renderStepper();
     renderSummary();
     renderBullets("shifts", meeting.strategy_shifts);
     renderBullets("questions", meeting.open_questions);
@@ -95,24 +163,21 @@
     renderNotes();
     renderDocuments();
     renderPeople();
-    renderTranscriptCard();
+    renderTranscriptTab();
     renderChatState();
     $("assistant-card").hidden = !isAdmin;
 
     if (firstRender) {
       firstRender = false;
-      if (wantsRecording && isAdmin) {
-        $("recording-card").scrollIntoView({ behavior: "smooth", block: "start" });
-        $("rec-start").focus();
-      }
+      if (wantsRecording && isAdmin) $("rec-start").focus();
       if (isAdmin) recoverIfInterrupted();
     }
   }
 
   function renderBanner() {
     const banner = $("banner");
-    const latest = meeting.recordings[meeting.recordings.length - 1];
     const liveElsewhere = meeting.recordings.find((r) => r.status === "recording") && !recorder;
+    const latest = meeting.recordings[meeting.recordings.length - 1];
 
     if (liveElsewhere && isAdmin) {
       const rec = meeting.recordings.find((r) => r.status === "recording");
@@ -121,21 +186,18 @@
           `${plural(rec.chunks_received || 0, "piece")} saved so far. If it was interrupted, process what was recorded or discard it.`),
         h("button", { class: "btn btn-secondary btn-sm", type: "button", onclick: () => finishInterrupted(rec) }, "Process it"),
         h("button", { class: "btn btn-ghost btn-sm", type: "button", onclick: () => discardRecording(rec) }, "Discard")));
-    } else if (isBusy(meeting)) {
-      replace(banner, h("div", { class: "alert alert-info banner" },
-        h("span", { class: "spinner", "aria-hidden": "true" }),
-        h("div", {}, h("strong", {}, "Processing the recording… "),
-          "Transcription and AI analysis usually take under a minute (longer for long meetings). This page updates by itself.")));
     } else if (meeting.status === "failed") {
       replace(banner, h("div", { class: "alert alert-error banner" }, icon("i-info"),
         h("div", {}, h("strong", {}, "Processing failed. "), (latest && latest.error) || "Something went wrong."),
         isAdmin && latest ? h("button", { class: "btn btn-secondary btn-sm", type: "button", onclick: retry }, "Retry processing") : null));
-    } else if (meeting.status === "review") {
+    } else if (meeting.status === "review" && !isBusy(meeting)) {
       const n = meeting.tasks.filter((t) => !t.approved).length;
       replace(banner, h("div", { class: "alert alert-info banner" }, icon("i-shield"),
         isAdmin
-          ? h("div", {}, h("strong", {}, `AI drafted ${plural(n, "task")}. `), "Review them below, or tell the task assistant what to do. Nothing is shared until you approve.")
-          : h("div", {}, "The AI results are being reviewed by an admin.")));
+          ? h("div", {}, h("strong", {}, `AI drafted ${plural(n, "task")}. `), "Review them, or tell the task assistant what to do. Nothing is shared until you approve.")
+          : h("div", {}, "The AI results are being reviewed by an admin."),
+        isAdmin && currentTab !== "tasks"
+          ? h("button", { class: "btn btn-primary btn-sm", type: "button", onclick: () => { showTab("tasks", { remember: true, scroll: true }); renderBanner(); } }, "Review tasks") : null));
     } else if (justCreated && meeting.status === "scheduled" && !meeting.recordings.length) {
       replace(banner, h("div", { class: "alert alert-info banner" }, icon("i-info"),
         h("div", {}, h("strong", {}, "Meeting created. "), "Start recording when the meeting begins, or upload a recording afterwards.")));
@@ -149,16 +211,50 @@
     catch (err) { toast(err.message, "error"); }
   }
 
+  /* --- processing steps --- */
+
+  const STAGE_TEXT = {
+    queued: "Waiting for a free worker…",
+    preparing: "Joining the recorded pieces into one file…",
+    transcribing: "Turning speech into text…",
+    analysing: "AI is writing the summary, decisions, questions & answers and tasks…",
+  };
+
+  function renderStepper() {
+    const card = $("stepper-card");
+    const rec = meeting.recordings.slice().reverse().find((r) => BUSY.has(r.status));
+    if (!rec) { card.hidden = true; return; }
+    const live = rec.mode && rec.mode !== "upload";
+    const steps = [["saved", live ? "Recorded" : "Uploaded"]];
+    if (live) steps.push(["preparing", "Preparing audio"]);
+    steps.push(["transcribing", "Transcribing"], ["analysing", "Analysing"], ["ready", isAdmin ? "Ready for review" : "Ready"]);
+    const stage = rec.status === "queued" ? steps[1][0] : rec.stage || "transcribing";
+    const current = Math.max(1, steps.findIndex(([key]) => key === stage));
+    replace($("stepper"), steps.map(([, label], i) => h("li", {
+      class: "step-item" + (i < current ? " is-done" : i === current ? " is-current" : ""),
+      "aria-current": i === current ? "step" : null,
+    },
+    h("span", { class: "step-dot", "aria-hidden": "true" },
+      i < current ? "✓" : i === current ? h("span", { class: "spinner" }) : String(i + 1)),
+    h("span", { class: "step-label" }, label))));
+    $("stepper-note").textContent = (STAGE_TEXT[rec.status === "queued" ? "queued" : stage] || "") +
+      " Usually under a minute, longer for long meetings. This page updates by itself.";
+    card.hidden = false;
+  }
+
   function renderSummary() {
     if (meeting.summary) {
       replace($("summary"), h("div", { class: "prose" }, h("p", {}, meeting.summary)));
       replace($("ai-model"), h("span", { class: "badge badge-ai", title: "Generated by " + meeting.ai_model }, "AI · " + shortModel(meeting.ai_model)));
     } else {
       $("ai-model").replaceChildren();
-      const text = isBusy(meeting) ? "The summary appears here once processing finishes."
-        : isAdmin ? "Record the meeting above (or upload a recording) to get a summary, decisions, Q&A and tasks."
-        : "The summary appears here after the meeting has been processed.";
-      replace($("summary"), h("p", { class: "muted" }, text));
+      const busy = isBusy(meeting);
+      replace($("summary"), busy
+        ? M.skeleton(2)
+        : empty("No summary yet.",
+          isAdmin ? "Record the meeting or upload a recording to get a summary, decisions, Q&A and tasks."
+            : "The summary appears here after the meeting has been processed.",
+          isAdmin ? { icon: "i-mic", action: { label: "Go to recording", onclick: () => showTab("recording", { remember: true }) } } : { icon: "i-file" }));
     }
   }
 
@@ -249,11 +345,14 @@
     button.addEventListener("click", async () => {
       const ids = rows.filter((r) => r.keep.checked).map((r) => r.t.id);
       const discard = rows.length - ids.length;
-      if (discard && !confirm(`Discard ${plural(discard, "unticked draft")}? This can’t be undone.`)) return;
+      if (discard && !(await M.confirmDialog({
+        title: `Discard ${plural(discard, "draft")}?`, body: "Unticked drafts are deleted. This can’t be undone.",
+        confirmLabel: "Discard and continue", danger: true,
+      }))) return;
       button.disabled = true;
       try {
         await api.post(`/meetings/${id}/review`, { approved_task_ids: ids });
-        toast(ids.length ? `Approved ${plural(ids.length, "task")}. Owners with an account have been emailed.` : "Drafts discarded.");
+        toast(ids.length ? `Approved ${plural(ids.length, "task")}. Owners with an account have been emailed.` : "Drafts discarded.", "success");
         load();
       } catch (err) {
         button.disabled = false;
@@ -266,7 +365,7 @@
   }
 
   async function deleteTask(task) {
-    if (!confirm(`Delete the task “${task.title}”?`)) return;
+    if (!(await M.confirmDialog({ title: "Delete this task?", body: `“${task.title}” will be removed.`, confirmLabel: "Delete", danger: true }))) return;
     try { await api.del("/tasks/" + task.id); toast("Task deleted."); load(); }
     catch (err) { toast(err.message, "error"); }
   }
@@ -289,7 +388,9 @@
         onDelete: isAdmin ? deleteTask : null,
       })));
     } else {
-      replace(list, reviewing ? null : h("p", { class: "muted" }, "No action items yet."));
+      replace(list, reviewing ? null : empty("No action items yet.",
+        isBusy(meeting) ? "Tasks appear here once processing finishes." : isAdmin ? "They’re drafted by AI after a recording, or add one below." : null,
+        { icon: "i-tasks" }));
     }
     $("add-task").hidden = !isAdmin;
     if (isAdmin) ownerOptions($("new-task-owner"), "");
@@ -308,7 +409,7 @@
         priority: data.get("priority") || "normal",
       });
       form.reset();
-      toast("Task added.");
+      toast("Task added.", "success");
       load();
     } catch (err) { toast(err.message, "error"); }
   });
@@ -326,7 +427,7 @@
     if (!assistantForm.reportValidity()) return;
     const button = assistantForm.querySelector("button[type=submit]");
     button.disabled = true;
-    replace($("assistant-plan"), loading("Preparing a plan…"));
+    replace($("assistant-plan"), M.loading("Preparing a plan…"));
     try {
       const { run } = await api.post(`/meetings/${id}/assistant/plan`, { instruction: $("assistant-input").value });
       showPlan(run);
@@ -356,7 +457,7 @@
       confirmBtn.disabled = cancelBtn.disabled = true;
       try {
         const res = await api.post(`/agent-runs/${run.id}/confirm`);
-        toast(`Done: ${plural(res.run.result.changed, "task")} updated${res.run.result.discarded ? `, ${res.run.result.discarded} discarded` : ""}.`);
+        toast(`Done: ${plural(res.run.result.changed, "task")} updated${res.run.result.discarded ? `, ${res.run.result.discarded} discarded` : ""}.`, "success");
         replace(box);
         $("assistant-input").value = "";
         load();
@@ -371,7 +472,7 @@
     });
   }
 
-  /* ================= recording: live + upload + playback ================= */
+  /* ================= recording: setup, upload, list ================= */
 
   function selectTab(live) {
     $("tab-live").setAttribute("aria-selected", String(live));
@@ -402,7 +503,6 @@
   if (M.MeetingRecorder.supported()) fillMicrophones();
 
   function renderRecordings() {
-    $("recording-card").hidden = !isAdmin;
     if (!isAdmin) return;
     const busy = isBusy(meeting) || meeting.recordings.some((r) => r.status === "recording");
     $("rec-start").disabled = busy && !recorder;
@@ -445,7 +545,10 @@
 
   async function discardRecording(r) {
     const live = r.status === "recording";
-    if (!confirm(live ? "Discard this unfinished recording?" : `Delete “${r.original_filename}”? The transcript and AI results stay.`)) return;
+    const ok = await M.confirmDialog(live
+      ? { title: "Discard this unfinished recording?", body: "The pieces saved so far are deleted.", confirmLabel: "Discard", danger: true }
+      : { title: "Delete this recording?", body: `“${r.original_filename}” is deleted. The transcript and AI results stay.`, confirmLabel: "Delete", danger: true });
+    if (!ok) return;
     try { await api.del(`/recordings/${r.id}`); toast(live ? "Recording discarded." : "Recording deleted."); load(); }
     catch (err) { toast(err.message, "error"); }
   }
@@ -469,12 +572,153 @@
     } catch (e) { /* nothing to recover */ }
   }
 
+  /* ================= focus recording screen ================= */
+
+  const waveLevels = new Array(96).fill(0);
+  let waveLast = 0;
+  let heartbeatLast = 0;
+  let focusReturn = null;
+
+  function showFocus(on) {
+    const focus = $("focus");
+    if (on && focus.hidden) focusReturn = document.activeElement;
+    focus.hidden = !on;
+    document.body.style.overflow = on ? "hidden" : "";
+    $("rec-bar").hidden = on || !recorder;
+    document.body.classList.toggle("rec-bar-on", !$("rec-bar").hidden);
+    if (on) {
+      $("focus-title").textContent = meeting.title;
+      renderFocusNotes();
+      drawWave();
+      setTimeout(() => $("rec-pause").focus(), 0);
+    } else if (focusReturn && document.contains(focusReturn) && !focusReturn.closest("#focus")) {
+      focusReturn.focus();
+    }
+  }
+
+  function pushLevel(level, paused) {
+    const now = performance.now();
+    if (now - waveLast < 80) return;
+    waveLast = now;
+    waveLevels.push(paused ? 0 : level);
+    waveLevels.shift();
+    drawWave();
+  }
+
+  function drawWave() {
+    const canvas = $("wave");
+    if ($("focus").hidden) return;
+    const ctx = canvas.getContext("2d");
+    const dpr = window.devicePixelRatio || 1;
+    const w = canvas.clientWidth;
+    const hgt = canvas.clientHeight;
+    if (!w || !hgt) return;
+    if (canvas.width !== Math.round(w * dpr)) { canvas.width = Math.round(w * dpr); canvas.height = Math.round(hgt * dpr); }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, hgt);
+    const styles = getComputedStyle(document.documentElement);
+    const paused = recorder && recorder.state === "paused";
+    ctx.fillStyle = (paused ? styles.getPropertyValue("--text-subtle") : styles.getPropertyValue("--danger")).trim() || "#dc2626";
+    const n = waveLevels.length;
+    const bw = w / n;
+    waveLevels.forEach((v, i) => {
+      const bh = Math.max(3, Math.min(1, v) * hgt * 0.95);
+      ctx.globalAlpha = 0.25 + 0.75 * (i / n); // older bars fade out
+      const x = i * bw + 1;
+      const y = (hgt - bh) / 2;
+      if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(x, y, Math.max(1, bw - 2), bh, 2); ctx.fill(); }
+      else ctx.fillRect(x, y, Math.max(1, bw - 2), bh);
+    });
+    ctx.globalAlpha = 1;
+  }
+  window.addEventListener("resize", drawWave);
+  document.addEventListener("meetmind:theme", drawWave);
+
+  function renderFocusNotes() {
+    const latest = (meeting.notes || []).slice(-3);
+    replace($("focus-notes"), latest.length ? latest.map(noteItem)
+      : h("li", { class: "muted small" }, "Notes you add appear here and are given to the AI with the recording."));
+  }
+
+  $("focus-min").addEventListener("click", () => showFocus(false));
+  $("open-focus").addEventListener("click", () => showFocus(true));
+  $("rec-bar-open").addEventListener("click", () => showFocus(true));
+  $("rec-bar-stop").addEventListener("click", () => stopRecording());
+
+  document.addEventListener("keydown", (e) => {
+    if (!recorder || $("focus").hidden || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.target.closest("input, textarea, select, [contenteditable]")) {
+      if (e.key === "Escape") e.target.blur();
+      return;
+    }
+    if (e.key === " " || e.code === "Space") {
+      if (e.target.closest("button")) return; // the focused button handles Space itself
+      e.preventDefault();
+      togglePause();
+    } else if (e.key === "m" || e.key === "M") {
+      e.preventDefault();
+      markMoment();
+    } else if (e.key === "n" || e.key === "N") {
+      e.preventDefault();
+      $("focus-note").focus();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      showFocus(false);
+    }
+  });
+
+  $("focus-note-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const input = $("focus-note");
+    const text = input.value.trim();
+    if (!text) return;
+    try {
+      await addNote(text);
+      input.value = "";
+      toast("Note saved at " + timestamp(recorder ? recorder.elapsed() : 0));
+    } catch (err) { toast(err.message, "error"); }
+  });
+
   /* --- live recording controls --- */
 
   function setRecordingUi(on) {
     $("live-setup").hidden = on;
     $("live-running").hidden = !on;
     $("tab-upload").disabled = on;
+    M.recordingHere = on;
+    if (!on) M.liveClear();
+    showFocus(on);
+  }
+
+  function togglePause() {
+    if (!recorder) return;
+    if (recorder.state === "paused") recorder.resume(); else recorder.pause();
+  }
+
+  async function markMoment() {
+    if (!recorder) return;
+    const at = recorder.elapsed();
+    try {
+      await api.post(`/meetings/${id}/notes`, { text: "Important moment", kind: "bookmark", offset_seconds: Math.round(at) });
+      toast("⭐ Marked at " + timestamp(at));
+      refreshNotes();
+    } catch (err) { toast(err.message, "error"); }
+  }
+
+  async function stopRecording() {
+    if (!recorder) return;
+    if (!(await M.confirmDialog({ title: "Stop recording?", body: "The recording is saved and the AI starts processing the meeting.", confirmLabel: "Stop & process" }))) return;
+    $("upload-status").textContent = "Finishing upload…";
+    try {
+      await recorder.stop();
+      recorder = null;
+      setRecordingUi(false);
+      toast("Recording saved. Processing has started.", "success");
+      await load();
+      showTab("overview", { remember: true });
+    } catch (err) {
+      toast(err.message, "error");
+    }
   }
 
   $("rec-start").addEventListener("click", async () => {
@@ -485,20 +729,30 @@
     }
     $("rec-start").disabled = true;
     recorder = new M.MeetingRecorder(id, {
-      time: ({ seconds }) => { $("rec-timer").textContent = timestamp(seconds); updateNoteWhen(); },
+      time: ({ seconds }) => {
+        const t = timestamp(seconds);
+        $("rec-timer").textContent = t;
+        $("rec-bar-time").textContent = t;
+        updateNoteWhen();
+        const now = Date.now();
+        if (now - heartbeatLast > 4000) { heartbeatLast = now; M.liveHeartbeat(id, meeting.title); }
+      },
       level: ({ level, tooQuiet, state }) => {
-        $("level-bar").style.width = Math.round(level * 100) + "%";
+        pushLevel(level, state === "paused");
         const hint = $("level-hint");
         if (state === "paused") { hint.textContent = "Paused"; hint.className = "small muted"; }
         else if (tooQuiet) { hint.textContent = "Very quiet: move the laptop closer to the speakers or use an external microphone."; hint.className = "small text-warning"; }
         else { hint.textContent = level > 0.08 ? "Good sound level" : "Listening…"; hint.className = "small muted"; }
       },
       state: ({ state }) => {
-        $("rec-state").textContent = state === "paused" ? "PAUSED" : state === "finishing" ? "SAVING" : "REC";
+        const label = state === "paused" ? "PAUSED" : state === "finishing" ? "SAVING" : "REC";
+        $("rec-state").textContent = label;
+        $("rec-bar-state").textContent = state === "paused" ? "Paused" : state === "finishing" ? "Saving" : "Recording";
         $("rec-badge").classList.toggle("is-paused", state !== "recording");
         $("rec-pause").textContent = state === "paused" ? "Resume" : "Pause";
         $("rec-pause").disabled = $("rec-mark").disabled = state === "finishing";
-        $("rec-stop").disabled = state === "finishing";
+        $("rec-stop").disabled = $("rec-bar-stop").disabled = state === "finishing";
+        drawWave();
       },
       upload: ({ waiting, ok, error }) => {
         $("upload-status").textContent = error ? "Upload problem: " + error
@@ -508,6 +762,7 @@
     });
     try {
       await recorder.start({ mode, deviceId: $("mic").value || null, noiseReduction: $("noise").checked });
+      M.liveHeartbeat(id, meeting.title);
       setRecordingUi(true);
       toast("Recording started.");
       fillMicrophones();
@@ -522,34 +777,10 @@
     }
   });
 
-  $("rec-pause").addEventListener("click", () => {
-    if (!recorder) return;
-    if (recorder.state === "paused") recorder.resume(); else recorder.pause();
-  });
-
-  $("rec-mark").addEventListener("click", async () => {
-    if (!recorder) return;
-    const at = recorder.elapsed();
-    try {
-      await api.post(`/meetings/${id}/notes`, { text: "Important moment", kind: "bookmark", offset_seconds: Math.round(at) });
-      toast("⭐ Marked at " + timestamp(at));
-      refreshNotes();
-    } catch (err) { toast(err.message, "error"); }
-  });
-
-  $("rec-stop").addEventListener("click", async () => {
-    if (!recorder || !confirm("Stop recording and process the meeting?")) return;
-    $("upload-status").textContent = "Finishing upload…";
-    try {
-      await recorder.stop();
-      recorder = null;
-      setRecordingUi(false);
-      toast("Recording saved. Processing has started.");
-      load();
-    } catch (err) {
-      toast(err.message, "error");
-    }
-  });
+  $("rec-pause").addEventListener("click", togglePause);
+  $("rec-mark").addEventListener("click", markMoment);
+  $("rec-stop").addEventListener("click", stopRecording);
+  window.addEventListener("pagehide", () => { if (recorder) M.liveClear(); });
 
   /* --- upload a file --- */
 
@@ -572,10 +803,11 @@
         bar.style.width = Math.round(p * 100) + "%";
         label.textContent = p < 1 ? `Uploading… ${Math.round(p * 100)}%` : "Uploaded. Starting processing…";
       });
-      toast("Recording uploaded. Processing has started.");
+      toast("Recording uploaded. Processing has started.", "success");
       form.reset();
       $("file-chip").hidden = true;
-      load();
+      await load();
+      showTab("overview", { remember: true });
     } catch (err) {
       toast(err.message, "error");
     } finally {
@@ -585,10 +817,19 @@
     }
   });
 
-  /* --- playback (and jumping to a moment) --- */
+  /* ================= playback: mini player at the bottom ================= */
 
   let mediaEl = null;
   let mediaFor = null;
+
+  function closePlayer() {
+    if (mediaEl) mediaEl.pause();
+    mediaEl = null;
+    mediaFor = null;
+    $("player").hidden = true;
+    $("player").replaceChildren();
+    document.body.classList.remove("has-mini-player");
+  }
 
   async function play(r, at) {
     try {
@@ -597,8 +838,12 @@
         const video = (content_type || "").startsWith("video");
         mediaEl = h(video ? "video" : "audio", { controls: true, preload: "metadata", src: url, class: "media" });
         mediaFor = r.id;
-        replace($("player"), h("div", { class: "small muted" }, "▶ " + r.original_filename), mediaEl);
+        replace($("player"),
+          h("span", { class: "now", title: r.original_filename }, "▶ " + r.original_filename),
+          mediaEl,
+          h("button", { class: "btn btn-ghost btn-icon btn-sm", type: "button", "aria-label": "Close player", title: "Close player", onclick: closePlayer }, icon("i-close")));
         $("player").hidden = false;
+        document.body.classList.add("has-mini-player");
       }
       if (at != null) {
         const seek = () => { mediaEl.currentTime = at; mediaEl.play().catch(() => {}); };
@@ -606,61 +851,66 @@
       } else {
         mediaEl.play().catch(() => {});
       }
-      $("player").scrollIntoView({ behavior: "smooth", block: "nearest" });
     } catch (err) { toast(err.message, "error"); }
   }
 
-  /* jump to a moment of the meeting's main recording (used by transcript lines and chat sources) */
+  /* jump to a moment of the meeting's main recording (transcript lines, notes and chat sources) */
   function seekTo(seconds) {
     const rec = meeting.recordings.slice().reverse().find((r) => r.status === "done");
-    if (!rec) { toast("The recording isn’t available to play.", "error"); return; }
-    if (!isAdmin) {
-      // members can play too; the card is admin-only, so show the player in the chat column
-      $("recording-card").hidden = false;
-      $("panel-live").hidden = $("panel-upload").hidden = true;
-      document.querySelector("#recording-card .tabs").hidden = true;
-    }
+    if (!rec) { toast("The recording isn’t available to play yet.", "error"); return; }
     play(rec, seconds);
   }
 
   /* ================= notes ================= */
 
   function updateNoteWhen() {
-    $("note-when").textContent = recorder && ["recording", "paused"].includes(recorder.state)
-      ? "Saved at " + timestamp(recorder.elapsed()) + " of the recording" : "";
+    $("note-when").textContent = recording()
+      ? "Saved at " + timestamp(recorder.elapsed()) + " of the recording · Ctrl + Enter to add" : "Ctrl + Enter to add";
+  }
+
+  function noteItem(n) {
+    const mine = n.author && n.author.id === user.id;
+    return h("li", { class: "note" + (n.kind === "bookmark" ? " note-bookmark" : "") },
+      n.offset_seconds != null
+        ? h("button", { class: "note-time", type: "button", title: "Play from here", onclick: () => seekTo(n.offset_seconds) }, timestamp(n.offset_seconds))
+        : h("span", { class: "note-time is-static" }, new Date(n.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })),
+      h("div", { class: "note-body" },
+        h("div", {}, n.kind === "bookmark" ? "⭐ " : "", n.text),
+        h("div", { class: "small muted" }, n.author ? (n.author.name || n.author.email) : "Someone")),
+      mine || isAdmin ? h("button", { class: "btn btn-ghost btn-icon btn-sm", type: "button", "aria-label": "Delete note",
+        title: "Delete note", onclick: () => deleteNote(n) }, icon("i-close")) : null,
+    );
   }
 
   function renderNotes() {
     const notes = meeting.notes || [];
-    replace($("notes"), notes.length ? notes.map((n) => {
-      const mine = n.author && n.author.id === user.id;
-      return h("li", { class: "note" + (n.kind === "bookmark" ? " note-bookmark" : "") },
-        n.offset_seconds != null
-          ? h("button", { class: "note-time", type: "button", title: "Play from here", onclick: () => seekTo(n.offset_seconds) }, timestamp(n.offset_seconds))
-          : h("span", { class: "note-time is-static" }, new Date(n.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })),
-        h("div", { class: "note-body" },
-          h("div", {}, n.kind === "bookmark" ? "⭐ " : "", n.text),
-          h("div", { class: "small muted" }, n.author ? (n.author.name || n.author.email) : "Someone")),
-        mine || isAdmin ? h("button", { class: "btn btn-ghost btn-icon btn-sm", type: "button", "aria-label": "Delete note",
-          title: "Delete note", onclick: () => deleteNote(n) }, icon("i-close")) : null,
-      );
-    }) : h("li", { class: "muted small" }, "No notes yet. Anyone in the meeting can add notes, during or after it."));
+    replace($("notes"), notes.length ? notes.map(noteItem)
+      : h("li", {}, empty("No notes yet.", "Anyone in the meeting can add notes, during or after it.", { icon: "i-file" })));
+    if (!$("focus").hidden) renderFocusNotes();
   }
 
   async function refreshNotes() {
-    try { meeting.notes = (await api.get(`/meetings/${id}/notes`)).items; renderNotes(); } catch (e) { /* next load */ }
+    try {
+      meeting.notes = (await api.get(`/meetings/${id}/notes`)).items;
+      setCount("notes", meeting.notes.length);
+      renderNotes();
+    } catch (e) { /* next load */ }
+  }
+
+  async function addNote(text) {
+    const body = { text };
+    if (recording()) body.offset_seconds = Math.round(recorder.elapsed());
+    await api.post(`/meetings/${id}/notes`, body);
+    await refreshNotes();
   }
 
   $("note-form").addEventListener("submit", async (e) => {
     e.preventDefault();
     const text = $("note-text").value.trim();
     if (!text) return;
-    const body = { text };
-    if (recorder && ["recording", "paused"].includes(recorder.state)) body.offset_seconds = Math.round(recorder.elapsed());
     try {
-      await api.post(`/meetings/${id}/notes`, body);
+      await addNote(text);
       $("note-text").value = "";
-      refreshNotes();
     } catch (err) { toast(err.message, "error"); }
   });
   $("note-text").addEventListener("keydown", (e) => {
@@ -690,7 +940,8 @@
       h("div", { class: "row-actions" },
         h("button", { class: "btn btn-ghost btn-sm", type: "button", onclick: () => download(d) }, "Download"),
         isAdmin ? h("button", { class: "btn btn-ghost btn-sm text-danger", type: "button", onclick: () => deleteDoc(d) }, "Delete") : null),
-    )) : h("p", { class: "muted small" }, "No documents attached."));
+    )) : empty("No documents attached.", "Attach specs, documentation or bug reports, then ask the assistant about them.",
+      { icon: "i-file", action: { label: "Attach a document", onclick: () => $("doc-file").click() } }));
   }
 
   $("doc-file").addEventListener("change", async (e) => {
@@ -718,7 +969,7 @@
   }
 
   async function deleteDoc(d) {
-    if (!confirm(`Delete “${d.filename}”?`)) return;
+    if (!(await M.confirmDialog({ title: "Delete this document?", body: `“${d.filename}” is removed from the meeting and from search.`, confirmLabel: "Delete", danger: true }))) return;
     try { await api.del(`/documents/${d.id}`); load(); } catch (err) { toast(err.message, "error"); }
   }
 
@@ -741,16 +992,21 @@
 
   /* ================= transcript ================= */
 
-  function renderTranscriptCard() {
-    $("transcript-card").hidden = !meeting.has_transcript;
-    if (!meeting.has_transcript) { $("transcript").open = false; transcriptLoaded = false; }
-    else if ($("transcript").open && !transcriptLoaded) loadTranscript();
+  function renderTranscriptTab() {
+    if (!meeting.has_transcript) {
+      transcriptLoaded = false;
+      $("transcript-filter").hidden = true;
+      replace($("transcript-body"), isBusy(meeting) ? M.skeleton(4)
+        : empty("No transcript yet.", "It appears here after a recording has been processed.", { icon: "i-mic" }));
+    } else if (currentTab === "transcript" && !transcriptLoaded) {
+      loadTranscript();
+    }
   }
 
   async function loadTranscript() {
     transcriptLoaded = true;
     const body = $("transcript-body");
-    replace(body, loading("Loading transcript…"));
+    replace(body, M.skeleton(5));
     try {
       const { transcript } = await api.get(`/meetings/${id}/transcript`);
       const lines = transcript.segments.length
@@ -758,15 +1014,42 @@
             h("button", { class: "ts", type: "button", title: "Play from here", onclick: () => seekTo(s.start) }, timestamp(s.start)),
             s.speaker ? h("span", { class: "speaker" }, s.speaker) : null, s.text))
         : [h("p", { class: "transcript-line" }, transcript.text)];
-      replace(body, lines);
+      replace(body, lines, h("p", { class: "muted small", id: "transcript-nomatch", hidden: true }, "No lines match your search."));
+      $("transcript-filter").hidden = false;
+      filterTranscript();
     } catch (err) {
       transcriptLoaded = false;
       M.showPageError(body, err);
     }
   }
-  $("transcript").addEventListener("toggle", () => { if ($("transcript").open && !transcriptLoaded) loadTranscript(); });
 
-  /* ================= Q&A chat (multi-tool assistant) ================= */
+  function filterTranscript() {
+    const q = $("transcript-filter").value.trim().toLowerCase();
+    let shown = 0;
+    document.querySelectorAll("#transcript-body .transcript-line").forEach((line) => {
+      const hit = !q || line.textContent.toLowerCase().includes(q);
+      line.hidden = !hit;
+      shown += hit;
+    });
+    const none = $("transcript-nomatch");
+    if (none) none.hidden = shown > 0;
+  }
+  $("transcript-filter").addEventListener("input", filterTranscript);
+
+  /* ================= chat: column on wide screens, drawer on smaller ones ================= */
+
+  function setChatOpen(open) {
+    document.body.classList.toggle("chat-open", open);
+    $("chat-fab").setAttribute("aria-expanded", String(open));
+    if (open) setTimeout(() => $("chat-input").focus(), 50);
+    else if (document.activeElement && document.activeElement.closest("#side-column")) $("chat-fab").focus();
+  }
+  $("chat-fab").addEventListener("click", () => setChatOpen(true));
+  $("chat-close").addEventListener("click", () => setChatOpen(false));
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && document.body.classList.contains("chat-open")) setChatOpen(false); });
+  document.addEventListener("click", (e) => {
+    if (document.body.classList.contains("chat-open") && !e.target.closest("#side-column, #chat-fab, .dialog, .toast-region, #player")) setChatOpen(false);
+  });
 
   const chatLog = $("chat-log");
   const chatForm = $("chat-form");
@@ -840,13 +1123,17 @@
   /* ================= rename & delete ================= */
 
   $("rename").addEventListener("click", async () => {
-    const title = prompt("Meeting title", meeting.title);
-    if (!title || title.trim() === meeting.title) return;
-    try { await api.patch("/meetings/" + id, { title: title.trim() }); load(); } catch (err) { toast(err.message, "error"); }
+    const title = await M.dialog({ title: "Rename meeting", input: { label: "Meeting title", value: meeting.title, maxlength: 200 }, confirmLabel: "Save" });
+    if (!title || title === meeting.title) return;
+    try { await api.patch("/meetings/" + id, { title }); toast("Meeting renamed.", "success"); load(); } catch (err) { toast(err.message, "error"); }
   });
 
   $("delete-meeting").addEventListener("click", async () => {
-    if (!confirm(`Delete “${meeting.title}”? Its recordings, transcript, notes, documents and tasks are removed too. This can’t be undone.`)) return;
+    if (!(await M.confirmDialog({
+      title: `Delete “${meeting.title}”?`,
+      body: "Its recordings, transcript, notes, documents and tasks are removed too. This can’t be undone.",
+      confirmLabel: "Delete meeting", danger: true,
+    }))) return;
     try { await api.del("/meetings/" + id); location.assign("admin.html"); } catch (err) { toast(err.message, "error"); }
   });
 
